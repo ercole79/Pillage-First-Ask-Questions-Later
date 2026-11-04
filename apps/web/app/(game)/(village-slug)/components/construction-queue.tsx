@@ -13,11 +13,15 @@ import {
   LuGripVertical,
 } from 'react-icons/lu';
 import { MdCancel } from 'react-icons/md';
-import { calculateBuildingCostForLevel } from '@pillage-first/game-assets/utils/buildings';
+import {
+  calculateBuildingCostForLevel,
+  calculateBuildingDurationForLevel,
+} from '@pillage-first/game-assets/utils/buildings';
 import { Countdown } from 'app/(game)/(village-slug)/components/countdown';
 import { Resources } from 'app/(game)/(village-slug)/components/resources';
 import { useMediaQuery } from 'app/(game)/(village-slug)/hooks/dom/use-media-query';
 import { useCancelConstruction } from 'app/(game)/(village-slug)/hooks/use-cancel-construction';
+import { useComputedEffect } from 'app/(game)/(village-slug)/hooks/use-computed-effect';
 import {
   type ConstructionQueueDragHandlers,
   useConstructionQueueDrag,
@@ -32,6 +36,8 @@ import {
   CurrentVillageBuildingQueueContext,
   getBuildingUpgradeQueueEntryKey,
 } from 'app/(game)/(village-slug)/providers/current-village-building-queue-context';
+import { Icon } from 'app/components/icon';
+import { formatTime } from 'app/utils/time';
 
 const iconClassName =
   'text-2xl lg:text-3xl bg-background text-muted-foreground px-2 py-2.5 box-content border border-border rounded-xs transition-colors';
@@ -69,7 +75,7 @@ const ConstructionQueueCost = ({
   label,
   resources,
 }: ConstructionQueueCostProps) => (
-  <span className="flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground [&>span]:whitespace-nowrap">
+  <span className="flex max-w-full flex-wrap items-center gap-1 text-xs text-foreground [&>span]:whitespace-nowrap">
     {label && <span className="text-muted-foreground">{label}:</span>}
     <Resources
       iconClassName="size-4"
@@ -94,6 +100,8 @@ const ConstructionQueueBuilding = ({
   onCancel,
 }: ConstructionQueueBuildingProps) => {
   const { t } = useTranslation();
+  const { total: buildingDurationModifier } =
+    useComputedEffect('buildingDuration');
   const isScheduledEvent = buildingEvent.type === 'scheduledBuildingUpgrade';
   const scheduledEventCost = isScheduledEvent
     ? getBuildingUpgradeCost(buildingEvent)
@@ -132,21 +140,40 @@ const ConstructionQueueBuilding = ({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col border-x border-border px-2 transition-colors">
-        <span className="inline-flex items-center gap-1 whitespace-nowrap">
-          {isScheduledEvent && (
-            <LuClock
-              aria-label={t('Scheduled construction')}
-              className="shrink-0 text-sm text-muted-foreground"
-            />
-          )}
-          <b className="truncate">
-            {t(`BUILDINGS.${buildingEvent.buildingId}.NAME`)}
-          </b>
-          <span className="inline-flex items-center text-sm">
-            ({buildingEvent.level - 1} <IoIosArrowRoundForward />{' '}
-            {buildingEvent.level})
+        <div className="flex items-center gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap">
+            {isScheduledEvent && (
+              <LuClock
+                aria-label={t('Scheduled construction')}
+                className="shrink-0 text-sm text-muted-foreground"
+              />
+            )}
+            <b className="truncate">
+              {t(`BUILDINGS.${buildingEvent.buildingId}.NAME`)}
+            </b>
+            <span className="inline-flex shrink-0 items-center text-sm">
+              ({buildingEvent.level - 1} <IoIosArrowRoundForward />{' '}
+              {buildingEvent.level})
+            </span>
           </span>
-        </span>
+          {isScheduledEvent && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"
+              title={t('Upgrade duration')}
+            >
+              <Icon
+                type="buildingDuration"
+                className="size-4"
+              />
+              {formatTime(
+                calculateBuildingDurationForLevel(
+                  buildingEvent.buildingId,
+                  buildingEvent.level,
+                ) * buildingDurationModifier,
+              )}
+            </span>
+          )}
+        </div>
         {!isScheduledEvent && (
           <span className="text-sm">
             <Countdown
@@ -355,6 +382,10 @@ const ConstructionQueueContent = () => {
   const dropSourceId = draggedId;
 
   const containerRef = useClickOutside<HTMLElement>(() => {
+    if (isWiderThanLg) {
+      return;
+    }
+
     setIsExtended(false);
     setSelectedEventKey(null);
   });
@@ -388,7 +419,7 @@ const ConstructionQueueContent = () => {
     }),
   ];
 
-  const visibleSlots = isWiderThanLg ? slots : slots.slice(0, 1);
+  const visibleSlots = slots.slice(0, 1);
 
   const totalCost = orderedScheduledEvents.length > 0 && (
     <div className="min-w-0 self-stretch rounded-tr rounded-br border-r border-t border-b border-border bg-background px-2 py-1 ml-1 shadow-xs transition-[background-color,border-color,color]">
@@ -427,15 +458,14 @@ const ConstructionQueueContent = () => {
       className="fixed bottom-[calc(max(var(--twsa-safe-area-inset-bottom),2rem)+4.5rem)] left-safe z-30 flex max-w-[calc(100vw-var(--twsa-safe-area-inset-left)-var(--twsa-safe-area-inset-right)-1rem)] flex-col items-start gap-1 [contain:paint] transition-[bottom,color,left] lg:bottom-14 lg:z-10"
       ref={containerRef}
     >
-      {isWiderThanLg && totalCost}
-      {!isWiderThanLg && !isExtended && selectedEvent && (
+      {!isExtended && selectedEvent && (
         <ConstructionQueueBuilding
           buildingEvent={selectedEvent}
           isDragging={false}
           onCancel={cancelBuildingUpgradeQueueEntry}
         />
       )}
-      {!isWiderThanLg && isExtended && (
+      {isExtended && (
         <>
           {totalCost}
           <ul className="flex max-w-full flex-col items-stretch gap-1 overflow-visible rounded-xs rounded-l-none border-border bg-background/80 p-1 shadow-xs transition-[background-color,border-color,color]">
@@ -443,39 +473,31 @@ const ConstructionQueueContent = () => {
           </ul>
         </>
       )}
-      <ul
-        className={clsx(
-          'flex max-w-full gap-1 rounded-xs rounded-l-none border-border bg-background/80 p-1 shadow-xs transition-[background-color,border-color,color] lg:flex-col lg:items-stretch lg:overflow-visible',
-          isWiderThanLg
-            ? 'flex-col items-stretch overflow-visible'
-            : 'items-center overflow-x-auto',
-        )}
-      >
-        {visibleSlots.map((slot) => renderSlot(slot, isWiderThanLg))}
+      <ul className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xs rounded-l-none border-border bg-background/80 p-1 shadow-xs transition-[background-color,border-color,color]">
+        {visibleSlots.map((slot) => renderSlot(slot, false))}
 
-        {!isWiderThanLg && (
-          <li className="shrink-0">
-            <button
-              aria-label={
-                isExtended
-                  ? t('Close construction queue')
-                  : t('Expand construction queue')
-              }
-              className="inline-flex flex-col items-center gap-0.5 rounded-xs border border-border bg-muted px-0.5 py-1 text-muted-foreground transition-colors"
-              onClick={() => setIsExtended(!isExtended)}
-              type="button"
-            >
-              {isExtended ? (
-                <LuChevronDown className="text-2xl" />
-              ) : (
-                <LuChevronUp className="text-2xl" />
-              )}
-              <span className="min-w-7 text-center text-xs font-semibold tabular-nums leading-none">
-                {orderedEvents.length}/{totalSlotsCount}
-              </span>
-            </button>
-          </li>
-        )}
+        <li className="shrink-0">
+          <button
+            aria-expanded={isExtended}
+            aria-label={
+              isExtended
+                ? t('Close construction queue')
+                : t('Expand construction queue')
+            }
+            className="inline-flex flex-col items-center gap-0.5 rounded-xs border border-border bg-muted px-0.5 py-1 text-muted-foreground transition-colors"
+            onClick={() => setIsExtended((current) => !current)}
+            type="button"
+          >
+            {isExtended ? (
+              <LuChevronDown className="text-2xl" />
+            ) : (
+              <LuChevronUp className="text-2xl" />
+            )}
+            <span className="min-w-7 text-center text-xs font-semibold tabular-nums leading-none">
+              {orderedEvents.length}/{totalSlotsCount}
+            </span>
+          </button>
+        </li>
       </ul>
     </aside>
   );

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PLAYER_ID } from '@pillage-first/game-assets/player';
 import type { TroopMovementEvent } from '@pillage-first/types/models/game-event';
-import { tileTypeSchema } from '@pillage-first/types/models/tile';
+import { tileIdSchema, tileTypeSchema } from '@pillage-first/types/models/tile';
 import type { Troop } from '@pillage-first/types/models/troop';
 import { type Unit, unitIdSchema } from '@pillage-first/types/models/unit';
 import type { DbFacade } from '@pillage-first/utils/facades/database';
@@ -15,6 +15,11 @@ import {
   isRelocationTroopMovementEvent,
   isReturnTroopMovementEvent,
 } from '@pillage-first/utils/guards/event';
+import {
+  getPlayerCulturePointsRequirementContext,
+  updatePlayerCulturePointsAt,
+} from './culture-points';
+import { getVillagePlayerId } from './village';
 
 const WOUNDED_TROOP_DECAY_RATE_PER_DAY = 0.1;
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -456,7 +461,7 @@ export const validateTroopMovement = (
   }
 
   if (isFindNewVillageTroopMovementEvent(troopMovementEvent)) {
-    const { troops } = troopMovementEvent;
+    const { troops, villageId } = troopMovementEvent;
 
     const isUnoccupied = database.selectValue({
       sql: `
@@ -508,6 +513,25 @@ export const validateTroopMovement = (
 
     if (settlersAmount !== 3) {
       errors.push('Exactly 3 settlers must be selected');
+    }
+
+    if (villageId !== undefined) {
+      const playerId = getVillagePlayerId(database, villageId);
+
+      const culturePoints = updatePlayerCulturePointsAt(
+        database,
+        Date.now(),
+        playerId,
+      )!;
+
+      const { nextVillageCulturePointsRequirement } =
+        getPlayerCulturePointsRequirementContext(database, playerId);
+
+      if (culturePoints < nextVillageCulturePointsRequirement) {
+        errors.push(
+          `Not enough culture points. ${nextVillageCulturePointsRequirement} culture points are required to found the next village.`,
+        );
+      }
     }
   }
 
@@ -639,9 +663,9 @@ export const validateTroopMovement = (
         $player_id: PLAYER_ID,
       },
       schema: z.strictObject({
-        tile_id: z.number(),
+        tile_id: tileIdSchema,
         tile_type: tileTypeSchema,
-        current_village_tile_id: z.number(),
+        current_village_tile_id: tileIdSchema,
         owning_village_id: z.number().nullable(),
         is_player_target: z.coerce.boolean().nullable(),
       }),

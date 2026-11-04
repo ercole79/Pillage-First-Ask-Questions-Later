@@ -10,6 +10,7 @@ import {
 } from '@pillage-first/types/models/building';
 import type { GameEvent } from '@pillage-first/types/models/game-event';
 import { resourceFieldCompositionSchema } from '@pillage-first/types/models/resource-field-composition';
+import { tileIdSchema } from '@pillage-first/types/models/tile';
 import { playableTribeSchema } from '@pillage-first/types/models/tribe';
 import { calculateComputedEffect } from '@pillage-first/utils/game/calculate-computed-effect';
 import { rollLootTable } from '@pillage-first/utils/loot-table';
@@ -40,6 +41,7 @@ import {
   selectVillageIdAndTileIdQuery,
 } from '../../../queries/village-queries';
 import { createEvents } from '../../../utils/create-event';
+import { updatePlayerCulturePointsAt } from '../../../utils/culture-points';
 import {
   createHeroHealthRegenerationEventByVillageId,
   onHeroDeath,
@@ -201,6 +203,8 @@ export const findNewVillageMovementResolver: Resolver<
       tribe: playableTribeSchema,
     }),
   })!;
+
+  updatePlayerCulturePointsAt(database, resolvesAt, PLAYER_ID);
 
   // Create village with incremental slug v-{n}
   const newVillageId = database.selectValue({
@@ -434,7 +438,7 @@ export const reinforcementMovementResolver: Resolver<
       sql: selectVillageIdAndTileIdQuery,
       bind: { $tile_id: targetTileId },
       schema: z.strictObject({
-        tileId: z.number(),
+        tileId: tileIdSchema,
         tileType: z.enum(['free', 'oasis']),
         villageId: z.number(),
       }),

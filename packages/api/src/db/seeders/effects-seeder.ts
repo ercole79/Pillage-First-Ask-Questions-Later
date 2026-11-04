@@ -12,6 +12,7 @@ import {
   type TribalEffect,
 } from '@pillage-first/types/models/effect';
 import type { Server } from '@pillage-first/types/models/server';
+import { tileIdSchema } from '@pillage-first/types/models/tile';
 import type { DbFacade } from '@pillage-first/utils/facades/database';
 import { isLocalEffect } from '@pillage-first/utils/guards/effect';
 import { batchInsert } from '../utils/batch-insert';
@@ -118,6 +119,7 @@ const serverEffectsFactory = (server: Server): ServerEffect[] => {
   ];
 
   const decreasedValueEffectIds: ServerEffect['id'][] = [
+    'residenceTrainingDuration',
     'barracksTrainingDuration',
     'greatBarracksTrainingDuration',
     'stableTrainingDuration',
@@ -186,6 +188,7 @@ export const effectsSeeder = (database: DbFacade, server: Server): void => {
       id: z.number(),
     }),
   });
+
   const effectScopeIds = new Map(
     effectScopeRows.map((s) => {
       return [s.scope, s.id];
@@ -215,7 +218,7 @@ export const effectsSeeder = (database: DbFacade, server: Server): void => {
     bind: {
       $player_id: PLAYER_ID,
     },
-    schema: z.number(),
+    schema: tileIdSchema,
   })!;
 
   const effectsToInsert: EffectToInsert[] = [];

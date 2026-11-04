@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { z } from 'zod';
 import { prepareTestDatabase } from '@pillage-first/api/testing';
+import { tileIdSchema } from '@pillage-first/types/models/tile';
 import {
   insertEffectQuery,
   selectWheatProductionEffectIdQuery,
@@ -23,7 +24,7 @@ describe('map-controllers', () => {
       sql: 'SELECT id, tile_id, player_id FROM villages ORDER BY id LIMIT 1;',
       schema: z.strictObject({
         id: z.number(),
-        tile_id: z.number(),
+        tile_id: tileIdSchema,
         player_id: z.number(),
       }),
     })!;
@@ -123,7 +124,7 @@ describe('map-controllers', () => {
     // 1. Create a test village
     const village = database.selectObject({
       sql: 'SELECT id, tile_id FROM villages LIMIT 1',
-      schema: z.strictObject({ id: z.number(), tile_id: z.number() }),
+      schema: z.strictObject({ id: z.number(), tile_id: tileIdSchema }),
     })!;
 
     const wheatEffectId = database.selectValue({
@@ -293,7 +294,7 @@ describe('map-controllers', () => {
       database,
       createControllerArgs<'/players/:playerId/map-markers', 'post'>({
         path: { playerId },
-        body: { tileId, description, color },
+        body: { tileId, description, color, icon: 'mapMarkerAttack' },
       }),
     );
 
@@ -306,7 +307,12 @@ describe('map-controllers', () => {
     );
 
     expect(markers).toHaveLength(1);
-    expect(markers[0]).toStrictEqual({ tileId, description, color });
+    expect(markers[0]).toStrictEqual({
+      tileId,
+      description,
+      color,
+      icon: 'mapMarkerAttack',
+    });
 
     addMapMarker(
       database,
@@ -316,6 +322,7 @@ describe('map-controllers', () => {
           tileId,
           description: 'Updated target',
           color: '#16a34a',
+          icon: 'mapMarkerScout',
         },
       }),
     );
@@ -332,6 +339,7 @@ describe('map-controllers', () => {
       tileId,
       description: 'Updated target',
       color: '#16a34a',
+      icon: 'mapMarkerScout',
     });
 
     // 3. Remove marker
@@ -366,6 +374,7 @@ describe('map-controllers', () => {
           tileId: 123,
           description: 'Forward village target',
           color: '#2563eb',
+          icon: 'mapMarker',
         },
       }),
     );
@@ -378,6 +387,7 @@ describe('map-controllers', () => {
           tileId: 124,
           description: '',
           color: '#dc2626',
+          icon: 'mapMarker',
         },
       }),
     );
@@ -390,6 +400,7 @@ describe('map-controllers', () => {
           tileId: 125,
           description: '   ',
           color: '#16a34a',
+          icon: 'mapMarker',
         },
       }),
     );
@@ -405,11 +416,13 @@ describe('map-controllers', () => {
       tileId: 124,
       description: 'Map marker 2',
       color: '#dc2626',
+      icon: 'mapMarker',
     });
     expect(markers).toContainEqual({
       tileId: 125,
       description: 'Map marker 3',
       color: '#16a34a',
+      icon: 'mapMarker',
     });
   });
 });

@@ -4,11 +4,14 @@ import { calculateHeroLevel } from '@pillage-first/game-assets/utils/hero';
 import { developerSettingsSchema } from '@pillage-first/types/models/developer-settings';
 import type { GameEventType } from '@pillage-first/types/models/game-event';
 import { resourceSchema } from '@pillage-first/types/models/resource';
+import { tileIdSchema } from '@pillage-first/types/models/tile';
 import { materializeHeroAdventurePointsAt } from '../../utils/adventures';
+import { addPlayerCulturePoints } from '../../utils/culture-points';
 import { onHeroDeath } from '../../utils/hero';
 import { adjustLoyalty, createLoyaltyIncreaseEvent } from '../../utils/loyalty';
 import {
   addResourceSiteResourcesAt,
+  getVillagePlayerId,
   getVillageTileId,
   subtractResourceSiteResourcesAt,
 } from '../../utils/village';
@@ -35,6 +38,8 @@ export const getDeveloperSettings = createController('/developer-settings', {
         is_free_unit_research_enabled,
         is_free_hunting_parties_enabled,
         is_instant_hero_revive_enabled,
+        is_free_celebrations_enabled,
+        is_instant_celebrations_enabled,
         is_free_hero_revive_enabled
       FROM
         developer_settings
@@ -114,6 +119,10 @@ export const updateDeveloperSettings = createController(
           'huntersLodgeHunt',
           'gatherersHutGatheringTrip',
         ];
+        break;
+      }
+      case 'isInstantCelebrationsEnabled': {
+        eventTypes = ['culturePointsCelebration'];
         break;
       }
       case 'isInstantHeroReviveEnabled': {
@@ -250,6 +259,32 @@ export const updateVillageResources = createController(
   subtractResourceSiteResourcesAt(database, tileId, now, () => resources);
 });
 
+export const adjustCulturePoints = createController(
+  '/developer-settings/:villageId/culture-points',
+  'patch',
+  {
+    summary: 'Adjust player culture points',
+    requestParams: {
+      path: z.strictObject({ villageId: z.coerce.number() }),
+    },
+    requestBody: z.strictObject({
+      amount: z.union([
+        z.literal(-10_000),
+        z.literal(-1000),
+        z.literal(1000),
+        z.literal(10_000),
+      ]),
+    }),
+  },
+)(({ database, path: { villageId }, body: { amount } }) => {
+  addPlayerCulturePoints(
+    database,
+    amount,
+    Date.now(),
+    getVillagePlayerId(database, villageId),
+  );
+});
+
 export const incrementHeroAdventurePoints = createController(
   '/developer-settings/:heroId/increment-adventure-points',
   'patch',
@@ -345,7 +380,7 @@ export const adjustVillageLoyalty = createController(
   {
     summary: 'Adjust village loyalty',
     requestParams: {
-      path: z.strictObject({ tileId: z.coerce.number() }),
+      path: z.strictObject({ tileId: z.coerce.number().pipe(tileIdSchema) }),
     },
     requestBody: z.strictObject({ amount: z.number() }),
   },

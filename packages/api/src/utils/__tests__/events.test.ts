@@ -40,6 +40,7 @@ import {
 } from '@pillage-first/mocks/event';
 import type { GameEvent } from '@pillage-first/types/models/game-event';
 import { resourcesSchema } from '@pillage-first/types/models/resource';
+import { tileIdSchema } from '@pillage-first/types/models/tile';
 import { playableTribeSchema } from '@pillage-first/types/models/tribe';
 import type { Unit } from '@pillage-first/types/models/unit';
 import type { DbFacade } from '@pillage-first/utils/facades/database';
@@ -71,7 +72,7 @@ const getTileIdByCoordinates = (
   return database.selectValue({
     sql: 'SELECT id FROM tiles WHERE x = $x AND y = $y;',
     bind: { $x: coordinates.x, $y: coordinates.y },
-    schema: z.number(),
+    schema: tileIdSchema,
   })!;
 };
 
@@ -89,7 +90,7 @@ const getAnyVillageWithTile = (
     bind: { $player_id: PLAYER_ID },
     schema: z.strictObject({
       id: z.number(),
-      tileId: z.number(),
+      tileId: tileIdSchema,
     }),
   })!;
 };
@@ -1262,7 +1263,7 @@ describe('events utils', () => {
           LIMIT 1;
         `,
         bind: { $player_id: PLAYER_ID },
-        schema: z.strictObject({ id: z.number(), tile_id: z.number() }),
+        schema: z.strictObject({ id: z.number(), tile_id: tileIdSchema }),
       })!;
 
       const reinforcedVillage = database.selectObject({
@@ -1288,7 +1289,7 @@ describe('events utils', () => {
           $home_tile_id: homeVillage.tile_id,
           $player_id: PLAYER_ID,
         },
-        schema: z.strictObject({ id: z.number(), tile_id: z.number() }),
+        schema: z.strictObject({ id: z.number(), tile_id: tileIdSchema }),
       })!;
 
       database.exec({
@@ -1474,7 +1475,7 @@ describe('events utils', () => {
       const targetTileId = database.selectValue({
         sql: 'SELECT tile_id FROM villages WHERE id = $id',
         bind: { $id: villageId },
-        schema: z.number(),
+        schema: tileIdSchema,
       })!;
 
       expect(() =>
@@ -1541,7 +1542,7 @@ describe('events utils', () => {
       const targetTileId = database.selectValue({
         sql: 'SELECT tile_id FROM villages WHERE id = $id',
         bind: { $id: villageId },
-        schema: z.number(),
+        schema: tileIdSchema,
       })!;
 
       expect(() =>
@@ -1602,7 +1603,7 @@ describe('events utils', () => {
           LIMIT 1
         `,
         schema: z.strictObject({
-          targetTileId: z.number(),
+          targetTileId: tileIdSchema,
           x: z.number(),
           y: z.number(),
         }),
@@ -1784,7 +1785,7 @@ describe('events utils', () => {
       const villageTileId = database.selectValue({
         sql: 'SELECT tile_id FROM villages WHERE id = $village_id',
         bind: { $village_id: villageId },
-        schema: z.number(),
+        schema: tileIdSchema,
       })!;
 
       // Seed some troops
@@ -1827,7 +1828,7 @@ describe('events utils', () => {
       const villageTileId = database.selectValue({
         sql: 'SELECT tile_id FROM villages WHERE id = $village_id',
         bind: { $village_id: villageId },
-        schema: z.number(),
+        schema: tileIdSchema,
       })!;
 
       // Seed some troops
@@ -2118,6 +2119,70 @@ describe('events utils', () => {
     });
   });
 
+  test('small celebration developer flags independently control cost and duration', async () => {
+    using database = await prepareTestDatabase();
+    const villageId = getAnyVillageId(database);
+
+    const event = {
+      ...createGameEventMock('culturePointsCelebration'),
+      villageId,
+      celebrationType: 'small' as const,
+    };
+
+    const cost = getEventCost(database, event);
+    const duration = getEventDuration(database, event);
+
+    expect(cost.some((value) => value > 0)).toBe(true);
+    expect(duration).toBeGreaterThan(0);
+
+    setDevFlag(database, 'is_free_celebrations_enabled', 1);
+
+    expect(getEventCost(database, event)).toStrictEqual([0, 0, 0, 0]);
+    expect(getEventDuration(database, event)).toBe(duration);
+
+    setDevFlag(database, 'is_instant_celebrations_enabled', 1);
+
+    expect(getEventDuration(database, event)).toBe(0);
+    expect(getEventCost(database, event)).toStrictEqual([0, 0, 0, 0]);
+
+    setDevFlag(database, 'is_free_celebrations_enabled', 0);
+
+    expect(getEventCost(database, event)).toStrictEqual(cost);
+    expect(getEventDuration(database, event)).toBe(0);
+  });
+
+  test('large celebration developer flags independently control cost and duration', async () => {
+    using database = await prepareTestDatabase();
+    const villageId = getAnyVillageId(database);
+
+    const event = {
+      ...createGameEventMock('culturePointsCelebration'),
+      villageId,
+      celebrationType: 'large' as const,
+    };
+
+    const cost = getEventCost(database, event);
+    const duration = getEventDuration(database, event);
+
+    expect(cost.some((value) => value > 0)).toBe(true);
+    expect(duration).toBeGreaterThan(0);
+
+    setDevFlag(database, 'is_free_celebrations_enabled', 1);
+
+    expect(getEventCost(database, event)).toStrictEqual([0, 0, 0, 0]);
+    expect(getEventDuration(database, event)).toBe(duration);
+
+    setDevFlag(database, 'is_instant_celebrations_enabled', 1);
+
+    expect(getEventDuration(database, event)).toBe(0);
+    expect(getEventCost(database, event)).toStrictEqual([0, 0, 0, 0]);
+
+    setDevFlag(database, 'is_free_celebrations_enabled', 0);
+
+    expect(getEventCost(database, event)).toStrictEqual(cost);
+    expect(getEventDuration(database, event)).toBe(0);
+  });
+
   describe(getEventDuration, () => {
     test('buildingConstruction - should return 0', async () => {
       using database = await prepareTestDatabase();
@@ -2272,7 +2337,7 @@ describe('events utils', () => {
           LIMIT 1;
         `,
         bind: { $origin_tile_id: village.tileId },
-        schema: z.number(),
+        schema: tileIdSchema,
       })!;
 
       const event = createTroopMovementAttackEventMock({
@@ -2346,7 +2411,7 @@ describe('events utils', () => {
           LIMIT 1;
         `,
         bind: { $origin_tile_id: village.tileId },
-        schema: z.number(),
+        schema: tileIdSchema,
       })!;
 
       const event = createTroopMovementAttackEventMock({
@@ -2829,7 +2894,8 @@ describe('events utils', () => {
         },
       });
 
-      const selectValue = vi.spyOn(database, 'selectValue');
+      using selectValue = vi.spyOn(database, 'selectValue');
+
       createEvents<'huntersLodgeHunt'>(database, {
         type: 'huntersLodgeHunt',
         villageId,
@@ -2843,8 +2909,6 @@ describe('events utils', () => {
             selectResourceSiteResourcesRelevantEffectsByTileIdQuery,
         ),
       ).toHaveLength(1);
-
-      selectValue.mockRestore();
 
       const event = database.selectObject({
         sql: `

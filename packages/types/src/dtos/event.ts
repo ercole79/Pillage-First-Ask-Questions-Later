@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { tileIdSchema } from '@pillage-first/types/models/tile';
 import { buildingIdSchema } from '../models/building';
 import { effectIdSchema } from '../models/effect';
 import {
   catapultTargetsSchema,
+  culturePointsCelebrationTypeSchema,
   gameEventTypeSchema,
   heroOasisAnimalActionSchema,
   scoutingTargetSchema,
@@ -49,8 +51,8 @@ const buildingEventSchema = {
 const troopMovementEventSchema = {
   ...villageEventSchema,
   troops: z.array(troopSchema),
-  originTileId: z.number(),
-  targetTileId: z.number(),
+  originTileId: tileIdSchema,
+  targetTileId: tileIdSchema,
   scoutingTarget: scoutingTargetSchema.optional(),
   catapultTargets: catapultTargetsSchema.optional(),
   heroOasisAnimalAction: heroOasisAnimalActionSchema.optional(),
@@ -65,8 +67,8 @@ const resourcesSchema = z.strictObject({
 
 const merchantMovementEventSchema = {
   ...villageEventSchema,
-  originTileId: z.number(),
-  targetTileId: z.number(),
+  originTileId: tileIdSchema,
+  targetTileId: tileIdSchema,
   targetVillageId: z.number(),
   resources: resourcesSchema,
 };
@@ -184,6 +186,11 @@ export const createEventDtoSchema = z
     z.strictObject({
       type: z.literal('loyaltyIncrease'),
       ...globalEventSchema,
+    }),
+    z.strictObject({
+      type: z.literal('culturePointsCelebration'),
+      ...villageEventSchema,
+      celebrationType: culturePointsCelebrationTypeSchema,
     }),
     z.strictObject({
       type: z.literal('resourceTransfer'),

@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { factionSchema } from '@pillage-first/types/models/faction';
+import { mapMarkerIconSchema } from '@pillage-first/types/models/map-marker';
 import { resourceSchema } from '@pillage-first/types/models/resource';
 import { resourceFieldCompositionSchema } from '@pillage-first/types/models/resource-field-composition';
 import {
   oasisBonusTypeSchema,
+  tileIdSchema,
   tileTypeSchema,
 } from '@pillage-first/types/models/tile';
 import { tribeSchema } from '@pillage-first/types/models/tribe';
@@ -11,7 +13,7 @@ import { unitIdSchema } from '@pillage-first/types/models/unit';
 
 export const getTilesSchema = z
   .strictObject({
-    id: z.number(),
+    id: tileIdSchema,
     coordinates_x: z.number(),
     coordinates_y: z.number(),
     type: tileTypeSchema,
@@ -42,8 +44,8 @@ export const getTileTroopsSchema = z
   .strictObject({
     unit_id: unitIdSchema,
     amount: z.number(),
-    tile_id: z.number(),
-    source_tile_id: z.number(),
+    tile_id: tileIdSchema,
+    source_tile_id: tileIdSchema,
   })
   .meta({ id: 'GetTileTroopsRow' });
 
@@ -56,7 +58,8 @@ export const getTileOasisBonusesSchema = z
 
 export const getMapMarkersSchema = z
   .strictObject({
-    tile_id: z.number(),
+    icon: mapMarkerIconSchema,
+    tile_id: tileIdSchema,
     description: z.string(),
     color: z.string().regex(/^#[\dA-Fa-f]{6}$/u),
   })

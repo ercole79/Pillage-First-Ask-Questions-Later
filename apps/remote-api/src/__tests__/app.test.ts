@@ -250,7 +250,8 @@ test('previews an uploaded world without claiming it, then invalidates the previ
     const response = await app.request(previewPath);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toStrictEqual({
+
+    await expect(response.json()).resolves.toStrictEqual({
       name: 'UnicornBorough',
       version: '0.4.74',
       speed: 3,
@@ -261,7 +262,7 @@ test('previews an uploaded world without claiming it, then invalidates the previ
     });
   }
 
-  expect(await readdir(join(dataDirectory, 'uploads'))).toContain(
+  await expect(readdir(join(dataDirectory, 'uploads'))).resolves.toContain(
     `${store.getUploadForWorld(share.worldId)!.storageName}-shm`,
   );
 
@@ -278,7 +279,9 @@ test('previews an uploaded world without claiming it, then invalidates the previ
   await app.request(previewPath, { method: 'DELETE', headers });
 
   expect((await app.request(previewPath)).status).toBe(404);
-  expect(await readdir(join(dataDirectory, 'uploads'))).toStrictEqual([]);
+  await expect(readdir(join(dataDirectory, 'uploads'))).resolves.toStrictEqual(
+    [],
+  );
 });
 
 test('shares a world separately from reports, claims it on confirmation, and deletes it after import', async () => {
@@ -348,8 +351,12 @@ test('shares a world separately from reports, claims it on confirmation, and del
   expect((await app.request(path, options)).status).toBe(204);
   expect((await app.request(path, options)).status).toBe(204);
   expect(store.getWorld(share.worldId)).toBeUndefined();
-  expect(await readdir(join(dataDirectory, 'uploads'))).toStrictEqual([]);
-  expect(await readdir(join(dataDirectory, 'staging'))).toStrictEqual([]);
+  await expect(readdir(join(dataDirectory, 'uploads'))).resolves.toStrictEqual(
+    [],
+  );
+  await expect(readdir(join(dataDirectory, 'staging'))).resolves.toStrictEqual(
+    [],
+  );
   expect((await download()).status).toBe(404);
   expect(
     (await app.request(share.completeUrl, { method: 'POST' })).status,
@@ -361,90 +368,92 @@ test('expires shared worlds after 24 hours and cleans up completed and pending u
 
   const { app, config, dataDirectory, store } = testApp;
   const now = Date.now();
-  const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+  using clock = vi.spyOn(Date, 'now').mockReturnValue(now);
 
-  try {
-    const completed = await uploadSharedWorld(app);
-    const pending = await uploadSharedWorld(app);
+  const completed = await uploadSharedWorld(app);
+  const pending = await uploadSharedWorld(app);
 
-    await app.request(completed.completeUrl, { method: 'POST' });
+  await app.request(completed.completeUrl, { method: 'POST' });
 
-    const completedPath = join(
-      dataDirectory,
-      'uploads',
-      store.getUploadForWorld(completed.worldId)!.storageName,
-    );
-    await writeFile(`${completedPath}-wal`, '');
-    await writeFile(`${completedPath}-shm`, Buffer.alloc(32_768));
+  const completedPath = join(
+    dataDirectory,
+    'uploads',
+    store.getUploadForWorld(completed.worldId)!.storageName,
+  );
+  await writeFile(`${completedPath}-wal`, '');
+  await writeFile(`${completedPath}-shm`, Buffer.alloc(32_768));
 
-    const report = store.createReport({
-      title: 'Keep this report',
-      description: 'Details',
-      contact: null,
-      writeTokenHash: 'hash',
-      uploadExpiresAt: null,
-    });
-    const reportUpload = store.createUpload({
-      reportId: report.id,
-      expectedBytes: 100,
-      originalName: 'report.sqlite3',
-    });
+  const report = store.createReport({
+    title: 'Keep this report',
+    description: 'Details',
+    contact: null,
+    writeTokenHash: 'hash',
+    uploadExpiresAt: null,
+  });
 
-    clock.mockReturnValue(now + sharedWorldLifetimeMs - 1);
+  const reportUpload = store.createUpload({
+    reportId: report.id,
+    expectedBytes: 100,
+    originalName: 'report.sqlite3',
+  });
 
-    await cleanupExpiredWorlds(config, store);
+  clock.mockReturnValue(now + sharedWorldLifetimeMs - 1);
 
-    expect(store.getWorld(completed.worldId)).toBeDefined();
-    expect(store.getWorld(pending.worldId)).toBeDefined();
+  await cleanupExpiredWorlds(config, store);
 
-    clock.mockReturnValue(now + sharedWorldLifetimeMs);
+  expect(store.getWorld(completed.worldId)).toBeDefined();
+  expect(store.getWorld(pending.worldId)).toBeDefined();
 
-    const download = await app.request(
-      `/api/game-worlds/${completed.worldId}/download`,
-      {
-        method: 'POST',
-        headers: { authorization: `Bearer ${'token'.repeat(8)}` },
-      },
-    );
-    const renewal = await app.request(
-      `/api/game-worlds/${pending.worldId}/upload-url`,
-      {
-        method: 'POST',
-        headers: { authorization: `Bearer ${pending.writeToken}` },
-      },
-    );
+  clock.mockReturnValue(now + sharedWorldLifetimeMs);
 
-    expect(download.status).toBe(404);
-    expect(renewal.status).toBe(401);
-    expect(
-      (await app.request(`/api/game-worlds/${completed.worldId}`)).status,
-    ).toBe(404);
+  const download = await app.request(
+    `/api/game-worlds/${completed.worldId}/download`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${'token'.repeat(8)}` },
+    },
+  );
 
-    await cleanupExpiredWorlds(config, store);
-    await cleanupExpiredWorlds(config, store);
+  const renewal = await app.request(
+    `/api/game-worlds/${pending.worldId}/upload-url`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${pending.writeToken}` },
+    },
+  );
 
-    expect(store.getStatistics()).toMatchObject({
-      sharedWorldsExpired: 2,
-      sharedImportsConfirmed: 0,
-      sharedUploadsReserved: 2,
-      sharedUploadsCompleted: 1,
-      sharedUploadedBytes: sqliteFile.length,
-      sharedDownloadsStarted: 0,
-      reportsSubmitted: 1,
-      reportsDeleted: 0,
-    });
+  expect(download.status).toBe(404);
+  expect(renewal.status).toBe(401);
+  expect(
+    (await app.request(`/api/game-worlds/${completed.worldId}`)).status,
+  ).toBe(404);
 
-    expect(store.getWorld(completed.worldId)).toBeUndefined();
-    expect(store.getWorld(pending.worldId)).toBeUndefined();
-    expect(store.getUploadForWorld(completed.worldId)).toBeUndefined();
-    expect(store.getUploadForWorld(pending.worldId)).toBeUndefined();
-    expect(store.getReport(report.id)).toBeDefined();
-    expect(store.getUpload(reportUpload!.id)).toBeDefined();
-    expect(await readdir(join(dataDirectory, 'uploads'))).toStrictEqual([]);
-    expect(await readdir(join(dataDirectory, 'staging'))).toStrictEqual([]);
-  } finally {
-    clock.mockRestore();
-  }
+  await cleanupExpiredWorlds(config, store);
+  await cleanupExpiredWorlds(config, store);
+
+  expect(store.getStatistics()).toMatchObject({
+    sharedWorldsExpired: 2,
+    sharedImportsConfirmed: 0,
+    sharedUploadsReserved: 2,
+    sharedUploadsCompleted: 1,
+    sharedUploadedBytes: sqliteFile.length,
+    sharedDownloadsStarted: 0,
+    reportsSubmitted: 1,
+    reportsDeleted: 0,
+  });
+
+  expect(store.getWorld(completed.worldId)).toBeUndefined();
+  expect(store.getWorld(pending.worldId)).toBeUndefined();
+  expect(store.getUploadForWorld(completed.worldId)).toBeUndefined();
+  expect(store.getUploadForWorld(pending.worldId)).toBeUndefined();
+  expect(store.getReport(report.id)).toBeDefined();
+  expect(store.getUpload(reportUpload!.id)).toBeDefined();
+  await expect(readdir(join(dataDirectory, 'uploads'))).resolves.toStrictEqual(
+    [],
+  );
+  await expect(readdir(join(dataDirectory, 'staging'))).resolves.toStrictEqual(
+    [],
+  );
 });
 
 test('validates shared upload requests, SQLite contents, and renewal capabilities', async () => {
@@ -640,7 +649,9 @@ test('creates, chunk-uploads, and authorizes download of a SQLite world', async 
   );
 
   expect(repeatedCompletion.status).toBe(200);
-  expect(await repeatedCompletion.json()).toStrictEqual({ status: 'complete' });
+  await expect(repeatedCompletion.json()).resolves.toStrictEqual({
+    status: 'complete',
+  });
 
   const deniedDownload = await app.request(
     `/api/admin/reports/${report.reportId}/world`,
@@ -681,8 +692,12 @@ test('creates, chunk-uploads, and authorizes download of a SQLite world', async 
   });
 
   expect(deleted.status).toBe(204);
-  expect(await readdir(join(dataDirectory, 'uploads'))).toStrictEqual([]);
-  expect(await readdir(join(dataDirectory, 'staging'))).toStrictEqual([]);
+  await expect(readdir(join(dataDirectory, 'uploads'))).resolves.toStrictEqual(
+    [],
+  );
+  await expect(readdir(join(dataDirectory, 'staging'))).resolves.toStrictEqual(
+    [],
+  );
   expect(
     (
       await app.request(`/api/admin/reports/${report.reportId}/world`, {
@@ -924,8 +939,12 @@ test('deleting a pending upload removes files, chunks, and signed upload access'
   expect(store.getReport(reportId)).toBe(undefined);
   expect(store.getUpload(uploadId)).toBe(undefined);
   expect(store.getChunks(uploadId)).toStrictEqual([]);
-  expect(await readdir(join(dataDirectory, 'staging'))).toStrictEqual([]);
-  expect(await readdir(join(dataDirectory, 'uploads'))).toStrictEqual([]);
+  await expect(readdir(join(dataDirectory, 'staging'))).resolves.toStrictEqual(
+    [],
+  );
+  await expect(readdir(join(dataDirectory, 'uploads'))).resolves.toStrictEqual(
+    [],
+  );
   expect((await app.request(chunkUrl, chunkOptions)).status).toBe(401);
 });
 
