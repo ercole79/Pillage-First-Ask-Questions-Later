@@ -14,6 +14,7 @@ import {
   encodeAppVersionToDatabaseUserVersion,
   isSupportedDatabaseUserVersion,
 } from '@pillage-first/utils/version';
+import { isRemoteConnection } from 'app/(game)/utils/connection-settings';
 import { ShareGameWorldDialog } from 'app/(public)/(game-worlds)/(index)/components/share-game-world-dialog';
 import { useGameWorldActions } from 'app/(public)/(game-worlds)/hooks/use-game-world-actions';
 import { Text } from 'app/components/text';
@@ -44,6 +45,7 @@ export const ServerCard = ({ server }: ServerCardProps) => {
     deleteGameWorld,
     isDeleteGameWorldPending,
   } = useGameWorldActions();
+  const isRemote = isRemoteConnection(server.slug);
 
   const isActionPending =
     isExportGameWorldPending ||
@@ -56,10 +58,12 @@ export const ServerCard = ({ server }: ServerCardProps) => {
 
   const gameWorldVersion = server.version ?? '0.0.0';
 
-  const shouldDisplayGameWorldOutdatedAlert = !isSupportedDatabaseUserVersion(
-    encodeAppVersionToDatabaseUserVersion(gameWorldVersion),
-    appVersion,
-  );
+  const shouldDisplayGameWorldOutdatedAlert =
+    !isRemote &&
+    !isSupportedDatabaseUserVersion(
+      encodeAppVersionToDatabaseUserVersion(gameWorldVersion),
+      appVersion,
+    );
 
   return (
     <div
@@ -94,54 +98,58 @@ export const ServerCard = ({ server }: ServerCardProps) => {
           side="bottom"
         >
           <div className="flex flex-col">
-            <Button
-              className="h-8 justify-start gap-2 px-2 text-xs"
-              disabled={isActionPending}
-              variant="ghost"
-              onClick={() => {
-                setIsActionsOpen(false);
-                setIsShareOpen(true);
-              }}
-            >
-              <FaShareNodes className="text-gray-400 size-3.5" />
-              Share game world
-            </Button>
-            <Button
-              className="h-8 justify-start gap-2 px-2 text-xs"
-              disabled={isActionPending}
-              variant="ghost"
-              onClick={() => {
-                setIsActionsOpen(false);
-                void exportGameWorld({ server });
-              }}
-            >
-              {isExportGameWorldPending ? (
-                <FaSpinner className="text-gray-400 animate-spin size-3.5" />
-              ) : (
-                <FaDownload className="text-gray-400 size-3.5" />
-              )}
-              {isExportGameWorldPending
-                ? 'Exporting game world...'
-                : 'Export game world'}
-            </Button>
-            <Button
-              className="h-8 justify-start gap-2 px-2 text-xs"
-              disabled={isActionPending}
-              variant="ghost"
-              onClick={() => {
-                setIsActionsOpen(false);
-                void duplicateGameWorld({ server });
-              }}
-            >
-              {isDuplicateGameWorldPending ? (
-                <FaSpinner className="text-gray-400 animate-spin size-3.5" />
-              ) : (
-                <IoCopyOutline className="text-gray-400 size-3.5" />
-              )}
-              {isDuplicateGameWorldPending
-                ? 'Duplicating game world...'
-                : 'Duplicate game world'}
-            </Button>
+            {!isRemote && (
+              <>
+                <Button
+                  className="h-8 justify-start gap-2 px-2 text-xs"
+                  disabled={isActionPending}
+                  variant="ghost"
+                  onClick={() => {
+                    setIsActionsOpen(false);
+                    setIsShareOpen(true);
+                  }}
+                >
+                  <FaShareNodes className="text-gray-400 size-3.5" />
+                  Share game world
+                </Button>
+                <Button
+                  className="h-8 justify-start gap-2 px-2 text-xs"
+                  disabled={isActionPending}
+                  variant="ghost"
+                  onClick={() => {
+                    setIsActionsOpen(false);
+                    void exportGameWorld({ server });
+                  }}
+                >
+                  {isExportGameWorldPending ? (
+                    <FaSpinner className="text-gray-400 animate-spin size-3.5" />
+                  ) : (
+                    <FaDownload className="text-gray-400 size-3.5" />
+                  )}
+                  {isExportGameWorldPending
+                    ? 'Exporting game world...'
+                    : 'Export game world'}
+                </Button>
+                <Button
+                  className="h-8 justify-start gap-2 px-2 text-xs"
+                  disabled={isActionPending}
+                  variant="ghost"
+                  onClick={() => {
+                    setIsActionsOpen(false);
+                    void duplicateGameWorld({ server });
+                  }}
+                >
+                  {isDuplicateGameWorldPending ? (
+                    <FaSpinner className="text-gray-400 animate-spin size-3.5" />
+                  ) : (
+                    <IoCopyOutline className="text-gray-400 size-3.5" />
+                  )}
+                  {isDuplicateGameWorldPending
+                    ? 'Duplicating game world...'
+                    : 'Duplicate game world'}
+                </Button>
+              </>
+            )}
             <Button
               className="h-8 justify-start gap-2 px-2 text-xs text-red-500 hover:text-red-500"
               disabled={isActionPending}
@@ -157,8 +165,12 @@ export const ServerCard = ({ server }: ServerCardProps) => {
                 <FaTrash className="size-3.5" />
               )}
               {isDeleteGameWorldPending
-                ? 'Deleting game world...'
-                : 'Delete game world'}
+                ? isRemote
+                  ? 'Disconnecting...'
+                  : 'Deleting game world...'
+                : isRemote
+                  ? 'Disconnect'
+                  : 'Delete game world'}
             </Button>
           </div>
         </PopoverContent>
@@ -170,6 +182,7 @@ export const ServerCard = ({ server }: ServerCardProps) => {
       />
       <Text as="h2">{server.name}</Text>
       <div className="flex gap-2 flex-wrap">
+        {isRemote && <Badge variant="successive">Remote</Badge>}
         <Badge variant="successive">{server.configuration.speed}x</Badge>
         <Badge variant="successive">{server.playerConfiguration.tribe}</Badge>
         <Badge variant="successive">

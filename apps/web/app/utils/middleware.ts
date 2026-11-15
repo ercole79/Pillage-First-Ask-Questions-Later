@@ -1,4 +1,5 @@
 import type { RouterContextProvider } from 'react-router';
+import { getConnectionSettings } from 'app/(game)/utils/connection-settings';
 
 export const isGameWorldLocked = async (
   context: Readonly<RouterContextProvider>,
@@ -30,6 +31,12 @@ export const isGameWorldLocked = async (
 export const doesGameWorldExist = async (
   serverSlug: string,
 ): Promise<boolean> => {
+  const connectionSettings = getConnectionSettings(serverSlug);
+
+  if (connectionSettings?.mode === 'remote') {
+    return true;
+  }
+
   try {
     const root = await navigator.storage.getDirectory();
     const rootHandle = await root.getDirectoryHandle(

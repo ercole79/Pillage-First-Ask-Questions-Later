@@ -16,7 +16,7 @@ Design authority: project doc `online-mode-architecture.md`.
 | MySQL adapter (pool + meta schema: accounts/sessions/worlds)     | Yes                                                                   |
 | Game `DbFacade` on MySQL                                         | Follow-up (scaffold uses SQLite WASM kernel so resolvers stay shared) |
 | Full multi-human authz / visibility                              | Follow-up                                                             |
-| Web online fetcher swap                                          | Follow-up                                                             |
+| Web online fetcher swap                                          | Wired in web (remote connection UX + HTTP/WS transport)               |
 
 ## Run
 
@@ -35,6 +35,22 @@ npm run start -w @pillage-first/game-server
 - WebSocket: `ws://127.0.0.1:3010/ws?token=dev-token`
 
 Default stub map: `dev-token` → `playerId` 1; `admin-token` is admin for `/combat-simulator`.
+
+### CORS / web client
+
+`CORS_ORIGINS` defaults to `http://localhost:5173` (Vite web app). Set additional origins as a comma-separated list if you use another host/port. Empty `CORS_ORIGINS` allows all origins in the scaffold.
+
+### Run with the web UI
+
+```bash
+# terminal 1 — game-server
+npm run start -w @pillage-first/game-server
+
+# terminal 2 — web
+npm run dev -w @pillage-first/web
+```
+
+In the browser open **Game worlds → Create or connect → Remote server**, keep defaults (`http://127.0.0.1:3010` + `dev-token`), and connect. Settings persist in `localStorage` so refresh keeps remote mode.
 
 ## Tests
 
@@ -58,6 +74,5 @@ Includes a headless scheduler smoke test (events resolve with no HTTP/WS client)
 1. Port game schemas/SQL dialect to MySQL behind `DbFacade`
 2. Persist sessions in MySQL instead of env token map
 3. Multi-world supervisor (scheduler today is process-global)
-4. Wire `apps/web` online fetcher + WebSocket subscription
-5. Authz/visibility for foreign movements beyond notifier filtering
-6. Replace hard-coded `PLAYER_ID` inside resolvers with acting/owner player
+4. Authz/visibility for foreign movements beyond notifier filtering
+5. Replace hard-coded `PLAYER_ID` inside resolvers with acting/owner player
