@@ -9,6 +9,7 @@ import {
   SectionContent,
 } from 'app/(game)/(village-slug)/components/building-layout';
 import { usePreferences } from 'app/(game)/(village-slug)/hooks/use-preferences';
+import { ApiContext } from 'app/(game)/providers/api-context';
 import { Text } from 'app/components/text';
 import {
   Select,
@@ -34,6 +35,7 @@ export const GeneralPreferences = () => {
   const { t, i18n } = useTranslation();
   const { updatePreference, preferences } = usePreferences();
   const { locale, uiColorScheme } = use(CookieContext);
+  const { mode } = use(ApiContext);
 
   return (
     <Section>
@@ -197,32 +199,36 @@ export const GeneralPreferences = () => {
           </div>
         </div>
       </SectionContent>
-      <Separator orientation="horizontal" />
-      <SectionContent>
-        <Text
-          as="h2"
-          className="transition-colors"
-        >
-          {t('Development tooling')}
-        </Text>
-        <div className="flex gap-2">
-          <Text className="flex flex-4 gap-1 flex-col transition-colors">
-            <span className="font-medium">{t('Developer console')}</span>
-            <span>{t('Enables the developer console button.')}</span>
-          </Text>
-          <div className="flex flex-1 justify-end items-center">
-            <Switch
-              onCheckedChange={() =>
-                updatePreference({
-                  preferenceName: 'isDeveloperToolsConsoleEnabled',
-                  value: !preferences.isDeveloperToolsConsoleEnabled,
-                })
-              }
-              checked={preferences.isDeveloperToolsConsoleEnabled}
-            />
-          </div>
-        </div>
-      </SectionContent>
+      {mode === 'local' && (
+        <>
+          <Separator orientation="horizontal" />
+          <SectionContent>
+            <Text
+              as="h2"
+              className="transition-colors"
+            >
+              {t('Development tooling')}
+            </Text>
+            <div className="flex gap-2">
+              <Text className="flex flex-4 gap-1 flex-col transition-colors">
+                <span className="font-medium">{t('Developer console')}</span>
+                <span>{t('Enables the developer console button.')}</span>
+              </Text>
+              <div className="flex flex-1 justify-end items-center">
+                <Switch
+                  onCheckedChange={() =>
+                    updatePreference({
+                      preferenceName: 'isDeveloperToolsConsoleEnabled',
+                      value: !preferences.isDeveloperToolsConsoleEnabled,
+                    })
+                  }
+                  checked={preferences.isDeveloperToolsConsoleEnabled}
+                />
+              </div>
+            </div>
+          </SectionContent>
+        </>
+      )}
     </Section>
   );
 };

@@ -69,6 +69,7 @@ import { CurrentVillageLiveResourcesProvider } from 'app/(game)/(village-slug)/p
 import { GameLayoutContext } from 'app/(game)/(village-slug)/providers/game-layout-context';
 import { GameLayoutProvider } from 'app/(game)/(village-slug)/providers/game-layout-provider';
 import { VillageSlugProvider } from 'app/(game)/(village-slug)/providers/village-slug-provider';
+import { ApiContext } from 'app/(game)/providers/api-context';
 import { Icon } from 'app/components/icon';
 import { Text } from 'app/components/text';
 import { Tooltip } from 'app/components/tooltip';
@@ -666,6 +667,9 @@ const TopNavigation = ({
   const { t } = useTranslation();
   const isWiderThanLg = useMediaQuery('(min-width: 1024px)');
   const { preferences } = usePreferences();
+  const { mode } = use(ApiContext);
+  const showDeveloperTools =
+    mode === 'local' && preferences.isDeveloperToolsConsoleEnabled;
 
   return (
     <header className="flex flex-col w-full px-safe-or-2 pb-1 lg:px-safe lg:py-0 relative bg-linear-to-r from-gray-200 via-white to-gray-200 dark:from-muted/60 dark:via-card dark:to-muted/60">
@@ -721,7 +725,7 @@ const TopNavigation = ({
                 </li>
               </ul>
               <ul className="flex gap-1">
-                {preferences.isDeveloperToolsConsoleEnabled && (
+                {showDeveloperTools && (
                   <li>
                     <DesktopTopRowItem
                       aria-label={t('Developer tools')}
@@ -924,6 +928,9 @@ const MobileBottomNavigation = ({
 }: MobileBottomNavigationProps) => {
   const { t } = useTranslation();
   const { preferences } = usePreferences();
+  const { mode } = use(ApiContext);
+  const showDeveloperTools =
+    mode === 'local' && preferences.isDeveloperToolsConsoleEnabled;
 
   const container = useRef<HTMLDivElement>(null);
   const centeredElement = useRef<HTMLLIElement>(null);
@@ -981,7 +988,7 @@ const MobileBottomNavigation = ({
           <li>
             <ReportsNavigationItem />
           </li>
-          {preferences.isDeveloperToolsConsoleEnabled && (
+          {showDeveloperTools && (
             <li>
               <button
                 type="button"
@@ -1042,6 +1049,7 @@ const GameLayout = memo<Route.ComponentProps>(
   ({ params }) => {
     const { villageSlug } = params;
     const isWiderThanLg = useMediaQuery('(min-width: 1024px)');
+    const { mode } = use(ApiContext);
     const {
       isOpen: isDeveloperToolsOpen,
       hasOpened: hasDeveloperToolsOpened,
@@ -1081,7 +1089,7 @@ const GameLayout = memo<Route.ComponentProps>(
                     />
                   )}
                   <PreferencesUpdater />
-                  {hasDeveloperToolsOpened && (
+                  {mode === 'local' && hasDeveloperToolsOpened && (
                     <Suspense fallback={null}>
                       <DeveloperToolsConsole
                         isOpen={isDeveloperToolsOpen}

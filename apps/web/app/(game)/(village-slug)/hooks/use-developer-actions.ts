@@ -41,10 +41,16 @@ type AdjustLoyaltyArgs = { amount: number };
 type AdjustCulturePointsArgs = { amount: -10_000 | -1000 | 1000 | 10_000 };
 
 export const useDeveloperActions = () => {
-  const { apiClient } = use(ApiContext);
+  const { apiClient, mode } = use(ApiContext);
   const { villageSlug } = use(VillageSlugContext);
   const { hero } = useHero();
   const { currentVillage } = useCurrentVillage();
+
+  const assertOfflineOnly = () => {
+    if (mode === 'remote') {
+      throw new Error('Developer tools are offline-only on the game server');
+    }
+  };
 
   const { mutate: updateDeveloperSetting } = useMutation<
     void,
@@ -52,6 +58,7 @@ export const useDeveloperActions = () => {
     UpdateDeveloperSettingArgs
   >({
     mutationFn: async ({ developerSettingName, value }) => {
+      assertOfflineOnly();
       await apiClient.patch('/developer-settings/:developerSettingName', {
         path: {
           developerSettingName,
@@ -72,6 +79,7 @@ export const useDeveloperActions = () => {
     UpdateVillageResourcesArgs
   >({
     mutationFn: async ({ villageId, resource, amount, direction }) => {
+      assertOfflineOnly();
       await apiClient.patch('/developer/villages/:villageId/resources', {
         path: {
           villageId,
@@ -94,6 +102,7 @@ export const useDeveloperActions = () => {
     AdjustCulturePointsArgs
   >({
     mutationFn: async ({ amount }) => {
+      assertOfflineOnly();
       await apiClient.patch('/developer/me/culture-points', {
         body: { amount },
       });
@@ -106,6 +115,7 @@ export const useDeveloperActions = () => {
   const { mutate: spawnHeroItem } = useMutation<void, Error, SpawnHeroItemArgs>(
     {
       mutationFn: async ({ itemId, amount }) => {
+        assertOfflineOnly();
         await apiClient.patch('/developer/heroes/:heroId/spawn-item', {
           path: {
             heroId: hero.id,
@@ -127,6 +137,7 @@ export const useDeveloperActions = () => {
 
   const { mutate: incrementHeroAdventurePoints } = useMutation<void>({
     mutationFn: async () => {
+      assertOfflineOnly();
       await apiClient.patch(
         '/developer/heroes/:heroId/increment-adventure-points',
         {
@@ -143,6 +154,7 @@ export const useDeveloperActions = () => {
 
   const { mutate: levelUpHero } = useMutation<void>({
     mutationFn: async () => {
+      assertOfflineOnly();
       await apiClient.patch('/developer/heroes/:heroId/level-up', {
         path: {
           heroId: hero.id,
@@ -156,6 +168,7 @@ export const useDeveloperActions = () => {
 
   const { mutate: killHero } = useMutation<void>({
     mutationFn: async () => {
+      assertOfflineOnly();
       await apiClient.patch('/developer/heroes/:heroId/kill', {
         path: {
           heroId: hero.id,
@@ -174,6 +187,7 @@ export const useDeveloperActions = () => {
   const { mutate: adjustLoyalty } = useMutation<void, Error, AdjustLoyaltyArgs>(
     {
       mutationFn: async ({ amount }) => {
+        assertOfflineOnly();
         await apiClient.patch('/developer/tiles/:tileId/loyalty', {
           path: { tileId: currentVillage.tileId },
           body: { amount },
