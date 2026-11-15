@@ -21,9 +21,26 @@
     "./db": {
       "default": "./src/db/index.ts"
     },
+    "./host": {
+      "default": "./src/host/index.ts"
+    },
     "./testing": {
       "default": "./src/db/testing/index.ts"
     }
+  },
+  "knip": {
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+    "entry": [
+      "src/http/api-routes.ts",
+      "src/host/index.ts"
+    ],
+    "ignoreBinaries": [
+      "biome",
+      "oxlint"
+    ],
+    "project": [
+      "src/**/*.ts!"
+    ]
   },
   "scripts": {
     "lint:check": "biome lint --no-errors-on-unmatched",
@@ -50,18 +67,5 @@
     "knip": "6.43.0",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
-  },
-  "knip": {
-    "$schema": "https://unpkg.com/knip@6/schema.json",
-    "entry": [
-      "src/http/api-routes.ts"
-    ],
-    "ignoreBinaries": [
-      "biome",
-      "oxlint"
-    ],
-    "project": [
-      "src/**/*.ts!"
-    ]
   }
 }

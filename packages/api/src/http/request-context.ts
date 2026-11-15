@@ -5,8 +5,16 @@ export type RequestContext = {
   readonly playerId: Player['id'];
 };
 
-// The local worker has one player. A future HTTP adapter should resolve this
-// identity from a validated session before passing context to the router.
-export const createRequestContext = (): RequestContext => ({
-  playerId: PLAYER_ID,
+export type CreateRequestContextOptions = {
+  readonly playerId?: Player['id'];
+};
+
+/**
+ * Offline worker default remains `PLAYER_ID`.
+ * Online HTTP adapters should pass the session-resolved player id.
+ */
+export const createRequestContext = (
+  options?: CreateRequestContextOptions,
+): RequestContext => ({
+  playerId: options?.playerId ?? PLAYER_ID,
 });
