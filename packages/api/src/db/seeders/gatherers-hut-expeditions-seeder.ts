@@ -3,7 +3,18 @@ import type { DbFacade } from '@pillage-first/utils/facades/database';
 
 export const gatherersHutExpeditionsSeeder = (database: DbFacade): void => {
   database.exec({
-    sql: `
+    sql:
+      database.dialect === 'mysql'
+        ? `
+      INSERT IGNORE INTO
+        gatherers_hut_expeditions (village_id, completed)
+      SELECT id, 0
+      FROM
+        villages
+      WHERE
+        player_id = $player_id;
+    `
+        : `
       INSERT INTO
         gatherers_hut_expeditions (village_id, completed)
       SELECT id, 0

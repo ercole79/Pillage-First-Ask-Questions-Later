@@ -314,7 +314,13 @@ export const migrateAndSeed = (
 
     db.execMulti({ sql: createReportsIndexes });
 
-    db.execMulti({ sql: createReportRetentionTriggers });
+    if (db.dialect === 'mysql') {
+      // MySQL cannot use a subquery/expression LIMIT inside this retention
+      // trigger the way SQLite does. Retention for online is a follow-up
+      // (application-level prune or a rewritten trigger). Skip for migrate.
+    } else {
+      db.execMulti({ sql: createReportRetentionTriggers });
+    }
 
     // Heroes
     db.execMulti({ sql: createHeroesTable });

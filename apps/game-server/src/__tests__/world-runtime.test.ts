@@ -15,12 +15,17 @@ describe('world runtime', () => {
 
   test('serves api-routes with session playerId and blocks developer tools', async () => {
     const world = await createWorldRuntime({
-      ...serverMock,
-      id: globalThis.crypto.randomUUID(),
-      slug: `runtime-${serverMock.slug}`,
+      server: {
+        ...serverMock,
+        id: globalThis.crypto.randomUUID(),
+        slug: `runtime-${serverMock.slug}`,
+      },
+      backend: 'sqlite',
     });
 
     try {
+      expect(world.backend).toBe('sqlite');
+
       const villages = await world.handleHttp({
         method: 'GET',
         pathWithQuery: '/me/villages',

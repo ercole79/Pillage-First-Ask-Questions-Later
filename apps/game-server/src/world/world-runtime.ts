@@ -4,9 +4,11 @@ import {
   createRequestContext,
   createSchedulerDataSource,
   type HostDatabase,
+  type HostDatabaseBackend,
+  type MysqlConnectionConfig,
   initScheduler,
   matchRoute,
-  openSeededHostDatabase,
+  openHostDatabase,
   scheduleNextEvent,
   setNotificationSink,
   setShouldPostNotifications,
@@ -45,6 +47,7 @@ export type WorldHttpResponse =
 export type WorldRuntime = {
   readonly server: Server;
   readonly database: HostDatabase;
+  readonly backend: HostDatabaseBackend;
   readonly queue: WorldSerialQueue;
   readonly notifier: WebSocketNotifier;
   handleHttp: (request: WorldHttpRequest) => Promise<WorldHttpResponse>;
@@ -52,15 +55,41 @@ export type WorldRuntime = {
   stop: () => void;
 };
 
+export type CreateWorldRuntimeOptions = {
+  readonly server: Server;
+  /**
+   * When provided (and reachable under `backend: 'auto'`), game state persists
+   * in MySQL alongside `online_*` meta tables.
+   */
+  readonly mysql?: MysqlConnectionConfig;
+  readonly backend?: HostDatabaseBackend | 'auto';
+  readonly seedIfEmpty?: boolean;
+};
+
 const villageIdSchema = z.number();
 
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+const isCreateOptions = (
+  value: Server | CreateWorldRuntimeOptions,
+): value is CreateWorldRuntimeOptions =>
+  typeof value === 'object' && value !== null && 'server' in value;
+
 export const createWorldRuntime = async (
-  server: Server,
+  serverOrOptions: Server | CreateWorldRuntimeOptions,
 ): Promise<WorldRuntime> => {
-  const database = await openSeededHostDatabase(server);
+  const options = isCreateOptions(serverOrOptions)
+    ? serverOrOptions
+    : { server: serverOrOptions };
+
+  const { database, backend: resolvedBackend } = await openHostDatabase({
+    server: options.server,
+    mysql: options.mysql,
+    backend: options.backend,
+    seedIfEmpty: options.seedIfEmpty,
+  });
+
   const queue = new WorldSerialQueue();
   const notifier = new WebSocketNotifier();
 
@@ -87,11 +116,12 @@ export const createWorldRuntime = async (
   scheduleNextEvent(queuedDataSource);
 
   return {
-    server,
+    server: options.server,
     database,
+    backend: resolvedBackend,
     queue,
     notifier,
-    getPlayerVillageIds: (playerId: number) =>
+    getPlayerVillageIds: (playerId) =>
       database.selectValues({
         sql: `
           SELECT id

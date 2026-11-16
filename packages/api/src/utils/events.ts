@@ -178,6 +178,39 @@ export const insertEvents = (database: DbFacade, events: GameEvent[]): void => {
 
   // One JSON parameter avoids SQLite's bind-variable limit and lets every
   // batch size reuse the same cached statement. The insert remains atomic.
+  // MySQL uses JSON_TABLE instead of jsonb_each (shared call site, dialect SQL).
+  if (database.dialect === 'mysql') {
+    database.exec({
+      sql: `
+        INSERT INTO events (
+          type,
+          starts_at,
+          duration,
+          village_id,
+          meta
+        )
+        SELECT
+          jt.type,
+          jt.starts_at,
+          jt.duration,
+          jt.village_id,
+          jt.meta
+        FROM JSON_TABLE(
+          CAST($events AS JSON),
+          '$[*]' COLUMNS (
+            type VARCHAR(64) PATH '$[0]' ERROR ON ERROR,
+            starts_at BIGINT PATH '$[1]' ERROR ON ERROR,
+            duration BIGINT PATH '$[2]' ERROR ON ERROR,
+            village_id BIGINT PATH '$[3]' NULL ON EMPTY NULL ON ERROR,
+            meta TEXT PATH '$[4]' NULL ON EMPTY NULL ON ERROR
+          )
+        ) AS jt;
+      `,
+      bind: { $events: JSON.stringify(rows) },
+    });
+    return;
+  }
+
   database.exec({
     sql: `
       INSERT INTO events (

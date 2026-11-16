@@ -55,6 +55,10 @@ export const createApp = ({
         slug: world.server.slug,
         name: world.server.name,
       },
+      gameDb: {
+        backend: world.backend,
+        dialect: world.database.dialect,
+      },
       mysql: mysqlStatus ?? {
         reachable: false,
         database: config.mysql.database,

@@ -45,7 +45,13 @@ const clearBindingsAfterExecution = (
   return statement;
 };
 
+/** Persistence dialect for shared schema/SQL adapters (offline SQLite vs online MySQL). */
+export type DbDialect = 'sqlite' | 'mysql';
+
 export type DbFacade = {
+  /** Defaults to `sqlite` when omitted (offline OPFS / WASM host). */
+  readonly dialect: DbDialect;
+
   exec: (args: ExecQueryArgs) => void;
   execMulti: (args: ExecQueryArgs) => void;
 
@@ -127,6 +133,8 @@ export const createDbFacade = (
   };
 
   const facade: DbFacade = {
+    dialect: 'sqlite',
+
     exec: ({ sql, bind }): void => {
       runStatement({
         sql,

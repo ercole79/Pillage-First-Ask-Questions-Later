@@ -37,7 +37,7 @@ const start = async (): Promise<void> => {
         throw new Error(`MySQL required but unreachable: ${mysqlStatusDetail}`);
       }
       console.error(
-        `[game-server] MySQL unreachable (${mysqlStatusDetail}); continuing with scaffold SQLite game kernel`,
+        `[game-server] MySQL unreachable (${mysqlStatusDetail}); continuing with in-memory SQLite game kernel fallback`,
       );
       await mysql.close();
       mysql = null;
@@ -59,12 +59,34 @@ const start = async (): Promise<void> => {
     }
   }
 
-  const world = await createWorldRuntime({
+  const worldServer = {
     ...serverMock,
     id: globalThis.crypto.randomUUID(),
     slug: `online-${serverMock.slug}`,
     name: `Online ${serverMock.name}`,
+  };
+
+  const world = await createWorldRuntime({
+    server: worldServer,
+    mysql: mysql
+      ? {
+          host: config.mysql.host,
+          port: config.mysql.port,
+          user: config.mysql.user,
+          password: config.mysql.password,
+          database: config.mysql.database,
+        }
+      : undefined,
+    backend: mysql ? 'mysql' : 'sqlite',
   });
+
+  console.error(
+    `[game-server] game DB backend: ${world.backend}${
+      world.backend === 'sqlite'
+        ? ' (in-memory fallback; set MYSQL_* and ensure MySQL is reachable for persistence)'
+        : ' (MySQL — game tables alongside online_*)'
+    }`,
+  );
 
   if (mysql) {
     await mysql

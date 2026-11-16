@@ -22,5 +22,10 @@ export {
 } from '../worker/notification-port';
 export {
   type HostDatabase,
+  type HostDatabaseBackend,
+  type MysqlConnectionConfig,
+  type OpenHostDatabaseOptions,
+  openHostDatabase,
   openSeededHostDatabase,
 } from './node-database';
+export { openMysqlHostDatabase } from './mysql-database';

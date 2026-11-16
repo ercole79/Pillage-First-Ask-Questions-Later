@@ -16,11 +16,11 @@ export type MysqlAdapterStatus = {
 /**
  * Online persistence adapter (decided: MySQL, not per-world SQLite).
  *
- * Scaffold scope:
+ * Scope:
  * - Connection pool + health check
  * - Meta schema for accounts/sessions/world registry (1 account = 1 character)
- * - Game `DbFacade` SQL/schemas still target SQLite WASM in this PR; porting
- *   the game kernel dialect onto this pool is a follow-up.
+ * - Game kernel persistence uses a separate MySQL DbFacade (same database,
+ *   game tables alongside `online_*`) via `@pillage-first/api/host`.
  */
 export class MysqlAdapter {
   readonly pool: Pool;

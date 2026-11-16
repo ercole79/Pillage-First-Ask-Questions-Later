@@ -5,6 +5,10 @@ import {
   type DbFacade,
 } from '@pillage-first/utils/facades/database';
 import { migrateAndSeed } from '../db';
+import {
+  type MysqlConnectionConfig,
+  openMysqlHostDatabase,
+} from './mysql-database.ts';
 
 let sqlite3Promise: Promise<Sqlite3Static> | null = null;
 
@@ -20,12 +24,24 @@ export type HostDatabase = DbFacade & {
   close: () => void;
 };
 
+export type HostDatabaseBackend = 'sqlite' | 'mysql';
+
+export type OpenHostDatabaseOptions = {
+  readonly server: Server;
+  /**
+   * `auto` (default for game-server): use MySQL when `mysql` config is provided
+   * and reachable; otherwise fall back to in-memory SQLite WASM.
+   */
+  readonly backend?: HostDatabaseBackend | 'auto';
+  readonly mysql?: MysqlConnectionConfig;
+  readonly seedIfEmpty?: boolean;
+};
+
 /**
- * Scaffold host DB for the game-server vertical slice.
+ * In-memory SQLite WASM host DB (dev fallback / tests).
  *
- * Online persistence target is MySQL (`apps/game-server` mysql adapter). Until
- * game SQL/schemas are ported, the always-on scheduler reuses the existing
- * SQLite WASM + `migrateAndSeed` kernel so resolvers stay unforked.
+ * Online persistence target is MySQL — prefer `openHostDatabase` / MySQL when
+ * reachable. Offline OPFS path remains `packages/api/src/worker/database.ts`.
  */
 export const openSeededHostDatabase = async (
   server: Server,
@@ -70,3 +86,57 @@ export const openSeededHostDatabase = async (
 
   return { ...facade, close };
 };
+
+/**
+ * Open the online host database: MySQL when configured/reachable, else SQLite WASM.
+ */
+export const openHostDatabase = async (
+  options: OpenHostDatabaseOptions,
+): Promise<{ database: HostDatabase; backend: HostDatabaseBackend }> => {
+  const backend = options.backend ?? 'auto';
+
+  if (backend === 'sqlite') {
+    return {
+      database: await openSeededHostDatabase(options.server),
+      backend: 'sqlite',
+    };
+  }
+
+  if (backend === 'mysql') {
+    if (!options.mysql) {
+      throw new Error('MySQL backend requested but no mysql config provided');
+    }
+    return {
+      database: await openMysqlHostDatabase({
+        config: options.mysql,
+        server: options.server,
+        seedIfEmpty: options.seedIfEmpty,
+      }),
+      backend: 'mysql',
+    };
+  }
+
+  // auto
+  if (options.mysql) {
+    try {
+      const database = await openMysqlHostDatabase({
+        config: options.mysql,
+        server: options.server,
+        seedIfEmpty: options.seedIfEmpty,
+      });
+      return { database, backend: 'mysql' };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[api/host] MySQL game DB unavailable (${detail}); falling back to SQLite WASM`,
+      );
+    }
+  }
+
+  return {
+    database: await openSeededHostDatabase(options.server),
+    backend: 'sqlite',
+  };
+};
+
+export type { MysqlConnectionConfig };
