@@ -12,7 +12,6 @@ import {
 import { cachesToClearOnResolve } from 'app/(game)/providers/constants/caches-to-clear-on-resolve';
 import { isEventResolvedSuccessfullyNotificationMessageEvent } from 'app/(game)/providers/guards/api-notification-event-guards';
 import { createTypedApiClient } from 'app/(game)/providers/utils/typed-api-client';
-import { createWorkerFetcher } from 'app/(game)/providers/utils/worker-fetch';
 import { reportError } from 'app/instrumentation/report-error';
 
 type ApiProviderProps = {
@@ -47,16 +46,12 @@ export const ApiProvider = ({
   serverSlug,
 }: PropsWithChildren<ApiProviderProps>) => {
   const queryClient = useQueryClient();
-  const { apiWorker, subscribeToApiWorkerNotifications } =
+  const { apiWorker, subscribeToApiWorkerNotifications, fetcher, mode } =
     useApiWorker(serverSlug);
 
-  useUpdateGameWorldVersionLabel(serverSlug, !!apiWorker);
+  useUpdateGameWorldVersionLabel(serverSlug, mode === 'local' && !!apiWorker);
 
   useEffect(() => {
-    if (!apiWorker) {
-      return;
-    }
-
     const DEBOUNCE_MS = 150;
     const debouncedInvalidators = new Map<
       string,
@@ -117,16 +112,15 @@ export const ApiProvider = ({
       }
       debouncedInvalidators.clear();
     };
-  }, [queryClient, subscribeToApiWorkerNotifications, apiWorker]);
+  }, [queryClient, subscribeToApiWorkerNotifications]);
 
   const value: ApiContextReturn = useMemo(() => {
-    const fetcher = createWorkerFetcher(apiWorker);
-
     return {
       apiWorker,
       apiClient: createTypedApiClient(fetcher),
+      mode,
     };
-  }, [apiWorker]);
+  }, [apiWorker, fetcher, mode]);
 
   return <ApiContext value={value}>{children}</ApiContext>;
 };

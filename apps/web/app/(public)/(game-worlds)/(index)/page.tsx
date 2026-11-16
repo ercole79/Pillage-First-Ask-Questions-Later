@@ -70,10 +70,13 @@ const MyGameWorldsPage = () => {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Text>Want to create or import an existing game state?</Text>
+            <Text>
+              Want to create a local world, connect to a remote game-server, or
+              import an existing game state?
+            </Text>
             <div className="flex gap-2 overflow-x-scroll scrollbar-hidden">
               <Link to="/game-worlds/create">
-                <Button>Create a new game world</Button>
+                <Button>Create or connect</Button>
               </Link>
               <Link to="/game-worlds/import">
                 <Button variant="outline">Import existing game state</Button>

@@ -152,4 +152,10 @@ export const closeAllApiWorkers = async (): Promise<void> => {
       await closeApiWorker();
     }),
   );
+
+  // Also tear down remote HTTP/WS transports when leaving the game shell.
+  const { closeAllRemoteApiHandles } = await import(
+    'app/(game)/providers/utils/remote-api-manager'
+  );
+  await closeAllRemoteApiHandles();
 };

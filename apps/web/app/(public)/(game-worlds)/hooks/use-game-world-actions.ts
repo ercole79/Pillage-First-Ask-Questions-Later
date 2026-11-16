@@ -2,6 +2,12 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Server } from '@pillage-first/types/models/server';
 import { isFileSystemLockError } from '@pillage-first/utils/opfs-lock-retry';
+import {
+  getConnectionSettings,
+  removeConnectionSettings,
+  setLocalConnectionSettings,
+  setRemoteConnectionSettings,
+} from 'app/(game)/utils/connection-settings';
 import type {
   ImportGameWorldWorkerPayload,
   ImportGameWorldWorkerResponse,
@@ -42,8 +48,15 @@ const removeAvailableServer = (server: Server): Server[] => {
   const servers = getAvailableServers();
   const updatedServers = servers.filter(({ id }) => id !== server.id);
   setAvailableServers(updatedServers);
+  removeConnectionSettings(server.slug);
 
   return updatedServers;
+};
+
+const upsertAvailableServer = (server: Server) => {
+  const servers = getAvailableServers();
+  const withoutSameSlug = servers.filter(({ slug }) => slug !== server.slug);
+  setAvailableServers([...withoutSameSlug, server]);
 };
 
 const isNotFoundError = (error: unknown) =>
@@ -170,7 +183,26 @@ export const useGameWorldActions = () => {
     { server: Server }
   >({
     mutationFn: async ({ server }) => {
+      setLocalConnectionSettings(server.slug);
       addAvailableServer(server);
+    },
+    onSuccess: async (_data, _vars, _onMutateResult, context) => {
+      await invalidateQueries(context, [[availableServerCacheKey]]);
+    },
+  });
+
+  const { mutateAsync: connectRemoteGameWorld } = useMutation<
+    void,
+    Error,
+    {
+      server: Server;
+      baseUrl: string;
+      authToken: string;
+    }
+  >({
+    mutationFn: async ({ server, baseUrl, authToken }) => {
+      setRemoteConnectionSettings(server.slug, { baseUrl, authToken });
+      upsertAvailableServer(server);
     },
     onSuccess: async (_data, _vars, _onMutateResult, context) => {
       await invalidateQueries(context, [[availableServerCacheKey]]);
@@ -224,6 +256,7 @@ export const useGameWorldActions = () => {
       return importGameWorldDatabase(databaseBuffer);
     },
     onSuccess: async (duplicatedServer, _vars, _onMutateResult, context) => {
+      setLocalConnectionSettings(duplicatedServer.slug);
       addAvailableServer(duplicatedServer);
       pushGameWorldDuplicated(duplicatedServer);
       await invalidateQueries(context, [[availableServerCacheKey]]);
@@ -249,6 +282,10 @@ export const useGameWorldActions = () => {
     { server: Server }
   >({
     mutationFn: async ({ server }) => {
+      if (getConnectionSettings(server.slug)?.mode === 'remote') {
+        return removeAvailableServer(server);
+      }
+
       const rootHandle = await getRootHandle();
       return deleteServerData(rootHandle, server);
     },
@@ -270,6 +307,10 @@ export const useGameWorldActions = () => {
   const { mutateAsync: deleteGameWorld, isPending: isDeleteGameWorldPending } =
     useMutation<Server[] | null, Error, { server: Server }>({
       mutationFn: async ({ server }) => {
+        if (getConnectionSettings(server.slug)?.mode === 'remote') {
+          return removeAvailableServer(server);
+        }
+
         const rootHandle = await getRootHandle();
         await reportMissingServerDatabaseIfNeeded(rootHandle, server);
 
@@ -298,6 +339,7 @@ export const useGameWorldActions = () => {
 
   return {
     createGameWorld,
+    connectRemoteGameWorld,
     exportGameWorld,
     isExportGameWorldPending,
     duplicateGameWorld,
