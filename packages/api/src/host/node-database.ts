@@ -5,6 +5,10 @@ import {
   type DbFacade,
 } from '@pillage-first/utils/facades/database';
 import { migrateAndSeed } from '../db';
+import {
+  type MysqlConnectionConfig,
+  openMysqlHostDatabase,
+} from './mysql-database.ts';
 
 let sqlite3Promise: Promise<Sqlite3Static> | null = null;
 
@@ -20,12 +24,21 @@ export type HostDatabase = DbFacade & {
   close: () => void;
 };
 
+export type HostDatabaseBackend = 'mysql';
+
+export type OpenHostDatabaseOptions = {
+  readonly server: Server;
+  readonly mysql: MysqlConnectionConfig;
+  readonly seedIfEmpty?: boolean;
+};
+
 /**
- * Scaffold host DB for the game-server vertical slice.
+ * In-memory SQLite WASM host DB for **unit/integration tests** of shared
+ * scheduler/resolvers only.
  *
- * Online persistence target is MySQL (`apps/game-server` mysql adapter). Until
- * game SQL/schemas are ported, the always-on scheduler reuses the existing
- * SQLite WASM + `migrateAndSeed` kernel so resolvers stay unforked.
+ * Online game-server must use MySQL (`openMysqlHostDatabase` /
+ * `openHostDatabase`). Offline OPFS path remains
+ * `packages/api/src/worker/database.ts` and is unchanged.
  */
 export const openSeededHostDatabase = async (
   server: Server,
@@ -70,3 +83,36 @@ export const openSeededHostDatabase = async (
 
   return { ...facade, close };
 };
+
+/**
+ * Open the online host database (MySQL only — no SQLite fallback).
+ *
+ * Online players must share one authoritative MySQL store. Callers should
+ * fail startup if this throws.
+ */
+export const openHostDatabase = async (
+  options: OpenHostDatabaseOptions,
+): Promise<{ database: HostDatabase; backend: HostDatabaseBackend }> => {
+  if (!options.mysql) {
+    throw new Error(
+      'Online game DB requires MySQL config (host/user/password/database). There is no SQLite/WASM fallback for game-server.',
+    );
+  }
+
+  try {
+    const database = await openMysqlHostDatabase({
+      config: options.mysql,
+      server: options.server,
+      seedIfEmpty: options.seedIfEmpty,
+    });
+    return { database, backend: 'mysql' };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Online game DB MySQL unavailable (${detail}). game-server refuses to start without MySQL so all players share one authoritative store.`,
+      { cause: error },
+    );
+  }
+};
+
+export type { MysqlConnectionConfig };

@@ -49,7 +49,8 @@ export const getConfig = (
       user: env.MYSQL_USER ?? 'pillage',
       password: env.MYSQL_PASSWORD ?? 'pillage',
       database: env.MYSQL_DATABASE ?? 'pillage_online',
-      required: (env.MYSQL_REQUIRED ?? 'false').toLowerCase() === 'true',
+      // Online game-server always needs MySQL (no SQLite fallback). Default true.
+      required: (env.MYSQL_REQUIRED ?? 'true').toLowerCase() !== 'false',
     },
     authTokenPlayerMap: parseJsonEnv(
       env.AUTH_TOKEN_PLAYER_MAP,

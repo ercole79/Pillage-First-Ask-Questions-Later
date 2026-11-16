@@ -4,9 +4,11 @@ import {
   createRequestContext,
   createSchedulerDataSource,
   type HostDatabase,
+  type HostDatabaseBackend,
+  type MysqlConnectionConfig,
   initScheduler,
   matchRoute,
-  openSeededHostDatabase,
+  openHostDatabase,
   scheduleNextEvent,
   setNotificationSink,
   setShouldPostNotifications,
@@ -45,11 +47,19 @@ export type WorldHttpResponse =
 export type WorldRuntime = {
   readonly server: Server;
   readonly database: HostDatabase;
+  readonly backend: HostDatabaseBackend;
   readonly queue: WorldSerialQueue;
   readonly notifier: WebSocketNotifier;
   handleHttp: (request: WorldHttpRequest) => Promise<WorldHttpResponse>;
   getPlayerVillageIds: (playerId: number) => Village['id'][];
   stop: () => void;
+};
+
+export type CreateWorldRuntimeOptions = {
+  readonly server: Server;
+  /** Required: online game state always persists in MySQL (no SQLite fallback). */
+  readonly mysql: MysqlConnectionConfig;
+  readonly seedIfEmpty?: boolean;
 };
 
 const villageIdSchema = z.number();
@@ -58,9 +68,20 @@ const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 export const createWorldRuntime = async (
-  server: Server,
+  options: CreateWorldRuntimeOptions,
 ): Promise<WorldRuntime> => {
-  const database = await openSeededHostDatabase(server);
+  if (!options.mysql) {
+    throw new Error(
+      'createWorldRuntime requires MySQL config. Online game-server has no SQLite/WASM fallback.',
+    );
+  }
+
+  const { database, backend: resolvedBackend } = await openHostDatabase({
+    server: options.server,
+    mysql: options.mysql,
+    seedIfEmpty: options.seedIfEmpty,
+  });
+
   const queue = new WorldSerialQueue();
   const notifier = new WebSocketNotifier();
 
@@ -87,11 +108,12 @@ export const createWorldRuntime = async (
   scheduleNextEvent(queuedDataSource);
 
   return {
-    server,
+    server: options.server,
     database,
+    backend: resolvedBackend,
     queue,
     notifier,
-    getPlayerVillageIds: (playerId: number) =>
+    getPlayerVillageIds: (playerId) =>
       database.selectValues({
         sql: `
           SELECT id

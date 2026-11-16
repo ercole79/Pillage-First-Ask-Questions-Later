@@ -9,7 +9,10 @@ import {
 } from './auth/session.ts';
 import { getConfig } from './config.ts';
 import { MysqlAdapter } from './persistence/mysql-adapter.ts';
-import { createWorldRuntime } from './world/world-runtime.ts';
+import {
+  createWorldRuntime,
+  type WorldRuntime,
+} from './world/world-runtime.ts';
 
 const readBearerFromUrl = (requestUrl: string): string | null => {
   try {
@@ -21,69 +24,86 @@ const readBearerFromUrl = (requestUrl: string): string | null => {
   }
 };
 
+const failStartup = (message: string): never => {
+  console.error(`[game-server] FATAL: ${message}`);
+  console.error(
+    '[game-server] Online mode requires a reachable MySQL database (no SQLite/WASM fallback). Fix MYSQL_* settings and retry.',
+  );
+  process.exit(1);
+};
+
+const connectMysql = async (config: ReturnType<typeof getConfig>) => {
+  const mysql = MysqlAdapter.fromConfig(config);
+  try {
+    const status = await mysql.healthCheck();
+    if (!status.reachable) {
+      await mysql.close().catch(() => undefined);
+      failStartup(
+        `MySQL unreachable (${status.detail ?? 'unknown error'}). game-server will not start without an authoritative MySQL store.`,
+      );
+    }
+    await mysql.ensureMetaSchema();
+    console.error(
+      `[game-server] MySQL connected (${status.database}); meta schema ready`,
+    );
+    return mysql;
+  } catch (error) {
+    await mysql.close().catch(() => undefined);
+    const detail = error instanceof Error ? error.message : String(error);
+    failStartup(`MySQL connection failed: ${detail}`);
+  }
+};
+
 const start = async (): Promise<void> => {
   const config = getConfig();
+  const mysqlConfig = {
+    host: config.mysql.host,
+    port: config.mysql.port,
+    user: config.mysql.user,
+    password: config.mysql.password,
+    database: config.mysql.database,
+  };
 
-  let mysql: MysqlAdapter | null = null;
-  let mysqlStatusDetail: string | undefined;
+  const mysql = await connectMysql(config);
 
-  try {
-    mysql = MysqlAdapter.fromConfig(config);
-    const status = await mysql.healthCheck();
-
-    if (!status.reachable) {
-      mysqlStatusDetail = status.detail ?? 'MySQL unreachable';
-      if (config.mysql.required) {
-        throw new Error(`MySQL required but unreachable: ${mysqlStatusDetail}`);
-      }
-      console.error(
-        `[game-server] MySQL unreachable (${mysqlStatusDetail}); continuing with scaffold SQLite game kernel`,
-      );
-      await mysql.close();
-      mysql = null;
-    } else {
-      await mysql.ensureMetaSchema();
-      console.error(
-        `[game-server] MySQL connected (${status.database}); meta schema ready`,
-      );
-    }
-  } catch (error) {
-    if (config.mysql.required) {
-      throw error;
-    }
-    mysqlStatusDetail = error instanceof Error ? error.message : String(error);
-    console.error(`[game-server] MySQL adapter skipped: ${mysqlStatusDetail}`);
-    if (mysql) {
-      await mysql.close().catch(() => undefined);
-      mysql = null;
-    }
-  }
-
-  const world = await createWorldRuntime({
+  const worldServer = {
     ...serverMock,
     id: globalThis.crypto.randomUUID(),
     slug: `online-${serverMock.slug}`,
     name: `Online ${serverMock.name}`,
-  });
+  };
 
-  if (mysql) {
-    await mysql
-      .upsertStubCharacter({
-        worldSlug: world.server.slug,
-        worldName: world.server.name,
-        accountExternalId: 'dev-account',
-        playerId: 1,
-      })
-      .catch((error) => {
-        console.error('[game-server] Failed to upsert stub character', error);
-      });
+  let world: WorldRuntime;
+  try {
+    world = await createWorldRuntime({
+      server: worldServer,
+      mysql: mysqlConfig,
+    });
+  } catch (error) {
+    await mysql.close().catch(() => undefined);
+    const detail = error instanceof Error ? error.message : String(error);
+    failStartup(`Game MySQL DbFacade failed to open: ${detail}`);
   }
+
+  console.error(
+    '[game-server] game DB backend: mysql (authoritative; game tables alongside online_*)',
+  );
+
+  await mysql
+    .upsertStubCharacter({
+      worldSlug: world.server.slug,
+      worldName: world.server.name,
+      accountExternalId: 'dev-account',
+      playerId: 1,
+    })
+    .catch((error) => {
+      console.error('[game-server] Failed to upsert stub character', error);
+    });
 
   const app = createApp({
     config,
     world,
     mysql,
-    mysqlStatusDetail,
   });
 
   const server = createServer(getRequestListener(app.fetch));
@@ -135,9 +155,7 @@ const start = async (): Promise<void> => {
     console.error('[game-server] shutting down');
     wss.close();
     world.stop();
-    if (mysql) {
-      await mysql.close();
-    }
+    await mysql.close();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -157,4 +175,7 @@ const start = async (): Promise<void> => {
   });
 };
 
-void start();
+void start().catch((error) => {
+  const detail = error instanceof Error ? error.message : String(error);
+  failStartup(detail);
+});
