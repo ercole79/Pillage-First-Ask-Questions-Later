@@ -6,38 +6,10 @@ import {
 } from '@pillage-first/api/host';
 import { serverMock } from '@pillage-first/mocks/server';
 import { z } from 'zod';
-import { getConfig } from '../config.ts';
-
-const mysqlConfig = () => {
-  const config = getConfig({
-    ...process.env,
-    MYSQL_HOST: process.env.MYSQL_HOST ?? '127.0.0.1',
-    MYSQL_PORT: process.env.MYSQL_PORT ?? '3306',
-    MYSQL_USER: process.env.MYSQL_USER ?? 'pillage',
-    MYSQL_PASSWORD: process.env.MYSQL_PASSWORD ?? 'pillage',
-    MYSQL_DATABASE: process.env.MYSQL_DATABASE ?? 'pillage_online',
-  });
-  const { host, port, user, password, database } = config.mysql;
-  return { host, port, user, password, database };
-};
-
-const canReachMysql = async (): Promise<boolean> => {
-  try {
-    const mysql = await import('mysql2/promise');
-    const connection = await mysql.createConnection({
-      host: mysqlConfig().host,
-      port: mysqlConfig().port,
-      user: mysqlConfig().user,
-      password: mysqlConfig().password,
-      database: mysqlConfig().database,
-    });
-    await connection.ping();
-    await connection.end();
-    return true;
-  } catch {
-    return false;
-  }
-};
+import {
+  canReachMysql,
+  getTestMysqlConfig,
+} from '../test-utils/mysql-config.ts';
 
 describe('MySQL game DbFacade', () => {
   afterEach(() => {
@@ -47,11 +19,12 @@ describe('MySQL game DbFacade', () => {
 
   test('migrates schema and persists events across reopen', async () => {
     if (!(await canReachMysql())) {
-      console.warn('Skipping MySQL game DB test — MySQL unreachable');
-      return;
+      throw new Error(
+        'MySQL is required for game-server tests (no SQLite fallback). Start MySQL or set MYSQL_*.',
+      );
     }
 
-    const config = mysqlConfig();
+    const config = getTestMysqlConfig();
     const mysql = await import('mysql2/promise');
 
     // Isolate this test in a dedicated schema so we do not clobber shared state.

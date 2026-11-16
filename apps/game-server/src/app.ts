@@ -12,8 +12,7 @@ import type { WorldRuntime } from './world/world-runtime.ts';
 export type CreateAppOptions = {
   readonly config: GameServerConfig;
   readonly world: WorldRuntime;
-  readonly mysql: MysqlAdapter | null;
-  readonly mysqlStatusDetail?: string;
+  readonly mysql: MysqlAdapter;
 };
 
 const apiPathWithQuery = (request: Request, path: string): string => {
@@ -26,7 +25,6 @@ export const createApp = ({
   config,
   world,
   mysql,
-  mysqlStatusDetail,
 }: CreateAppOptions): Hono => {
   const app = new Hono();
 
@@ -46,11 +44,11 @@ export const createApp = ({
   );
 
   app.get('/health', async (c) => {
-    const mysqlStatus = mysql ? await mysql.healthCheck() : null;
+    const mysqlStatus = await mysql.healthCheck();
 
     return c.json({
       ok: true,
-      mode: 'online-scaffold',
+      mode: 'online',
       world: {
         slug: world.server.slug,
         name: world.server.name,
@@ -59,11 +57,7 @@ export const createApp = ({
         backend: world.backend,
         dialect: world.database.dialect,
       },
-      mysql: mysqlStatus ?? {
-        reachable: false,
-        database: config.mysql.database,
-        detail: mysqlStatusDetail ?? 'MySQL adapter not attached',
-      },
+      mysql: mysqlStatus,
       scheduler: 'running',
     });
   });

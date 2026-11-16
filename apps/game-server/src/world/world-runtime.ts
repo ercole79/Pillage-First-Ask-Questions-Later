@@ -57,12 +57,8 @@ export type WorldRuntime = {
 
 export type CreateWorldRuntimeOptions = {
   readonly server: Server;
-  /**
-   * When provided (and reachable under `backend: 'auto'`), game state persists
-   * in MySQL alongside `online_*` meta tables.
-   */
-  readonly mysql?: MysqlConnectionConfig;
-  readonly backend?: HostDatabaseBackend | 'auto';
+  /** Required: online game state always persists in MySQL (no SQLite fallback). */
+  readonly mysql: MysqlConnectionConfig;
   readonly seedIfEmpty?: boolean;
 };
 
@@ -71,22 +67,18 @@ const villageIdSchema = z.number();
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-const isCreateOptions = (
-  value: Server | CreateWorldRuntimeOptions,
-): value is CreateWorldRuntimeOptions =>
-  typeof value === 'object' && value !== null && 'server' in value;
-
 export const createWorldRuntime = async (
-  serverOrOptions: Server | CreateWorldRuntimeOptions,
+  options: CreateWorldRuntimeOptions,
 ): Promise<WorldRuntime> => {
-  const options = isCreateOptions(serverOrOptions)
-    ? serverOrOptions
-    : { server: serverOrOptions };
+  if (!options.mysql) {
+    throw new Error(
+      'createWorldRuntime requires MySQL config. Online game-server has no SQLite/WASM fallback.',
+    );
+  }
 
   const { database, backend: resolvedBackend } = await openHostDatabase({
     server: options.server,
     mysql: options.mysql,
-    backend: options.backend,
     seedIfEmpty: options.seedIfEmpty,
   });
 

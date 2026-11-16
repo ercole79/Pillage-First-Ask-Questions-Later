@@ -4,20 +4,22 @@ Online multiplayer host. Offline OPFS/`ApiWorker` is unchanged.
 
 Design authority: project doc `online-mode-architecture.md`.
 
+**MySQL is required.** There is no SQLite/WASM fallback for online — if MySQL is unavailable, game-server refuses to start so all players share one authoritative store.
+
 ## What this hosts
 
-| Piece                                                            | Status                                                                |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------- |
-| HTTP adapter over `packages/api` `api-routes` / `matchRoute`     | Yes (`/api/*`)                                                        |
-| Session stub → `RequestContext.playerId`                         | Yes (`Authorization: Bearer …`)                                       |
-| Always-on scheduler (runs with client closed)                    | Yes                                                                   |
-| WebSocket notifier filtered by `affectedVillageIds` / public map | Yes (`/ws?token=…`)                                                   |
-| Per-world serial queue                                           | Yes                                                                   |
-| MySQL meta schema (`online_accounts` / worlds / sessions)        | Yes                                                                   |
-| Game `DbFacade` on MySQL (events, villages, troops, …)           | Yes — same database alongside `online_*`                              |
-| SQLite WASM fallback when MySQL unreachable                      | Yes (`MYSQL_REQUIRED=false`)                                          |
-| Full multi-human authz / visibility                              | Follow-up                                                             |
-| Web online fetcher swap                                          | Wired in web (remote connection UX + HTTP/WS transport)               |
+| Piece                                                            | Status                                              |
+| ---------------------------------------------------------------- | --------------------------------------------------- |
+| HTTP adapter over `packages/api` `api-routes` / `matchRoute`     | Yes (`/api/*`)                                      |
+| Session stub → `RequestContext.playerId`                         | Yes (`Authorization: Bearer …`)                     |
+| Always-on scheduler (runs with client closed)                    | Yes                                                 |
+| WebSocket notifier filtered by `affectedVillageIds` / public map | Yes (`/ws?token=…`)                                 |
+| Per-world serial queue                                           | Yes                                                 |
+| MySQL meta schema (`online_accounts` / worlds / sessions)        | Yes                                                 |
+| Game `DbFacade` on MySQL (events, villages, troops, …)           | Yes — same database alongside `online_*`            |
+| SQLite WASM online fallback                                      | **Removed** — startup fails without MySQL           |
+| Full multi-human authz / visibility                              | Follow-up                                           |
+| Web online fetcher swap                                          | Wired in web (remote connection UX + HTTP/WS)       |
 
 ## Run against local MySQL
 
@@ -38,9 +40,9 @@ npm run start -w @pillage-first/game-server
 On startup you should see:
 
 - `MySQL connected (pillage_online); meta schema ready`
-- `game DB backend: mysql (MySQL — game tables alongside online_*)`
+- `game DB backend: mysql (authoritative; game tables alongside online_*)`
 
-If MySQL is unreachable and `MYSQL_REQUIRED=false`, the server falls back to an **in-memory SQLite WASM** game kernel (state does not survive restart).
+If MySQL is unreachable, the process exits with a clear `FATAL` message (no silent SQLite fallback).
 
 - Health: `GET http://127.0.0.1:3010/health` — includes `gameDb.backend` / `gameDb.dialect`
 - Session: `GET http://127.0.0.1:3010/me` with `Authorization: Bearer dev-token`
@@ -54,7 +56,7 @@ Default stub map: `dev-token` → `playerId` 1; `admin-token` is admin for `/com
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `MYSQL_HOST` / `PORT` / `USER` / `PASSWORD` / `DATABASE` | `127.0.0.1` / `3306` / `pillage` / `pillage` / `pillage_online` | Game + meta tables share this schema |
-| `MYSQL_REQUIRED` | `false` | When `true`, refuse to start without MySQL |
+| `MYSQL_REQUIRED` | `true` | Online always needs MySQL; setting `false` is ignored for game-kernel startup (process still refuses without MySQL) |
 | `PORT` | `3010` | HTTP + WS |
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated; empty = allow all |
 
@@ -65,7 +67,7 @@ Default stub map: `dev-token` → `playerId` 1; `admin-token` is admin for `/com
 ### Run with the web UI
 
 ```bash
-# terminal 1 — game-server
+# terminal 1 — game-server (requires MySQL)
 npm run start -w @pillage-first/game-server
 
 # terminal 2 — web
@@ -77,22 +79,13 @@ In the browser open **Game worlds → Create or connect → Remote server**, kee
 ## Tests
 
 ```bash
+# MySQL must be reachable (tests fail hard if not — no skip/fallback)
 npm test -w @pillage-first/game-server
 ```
 
-Includes:
+Includes MySQL migrate + event CRUD persist-across-reopen, and world-runtime against MySQL.
 
-- Headless scheduler smoke (SQLite fallback path)
-- MySQL migrate + event CRUD persist-across-reopen (skips if MySQL unreachable)
-
-## Dev fallback story
-
-| Situation | Game kernel |
-| --- | --- |
-| MySQL reachable | MySQL `DbFacade` via sync worker-thread bridge; `migrateAndSeed` once; reopen reuses tables |
-| MySQL down, `MYSQL_REQUIRED=false` | In-memory SQLite WASM (same as earlier scaffold) |
-| MySQL down, `MYSQL_REQUIRED=true` | Process exits |
-| Offline browser worlds | Unchanged OPFS SQLite worker — not this app |
+Headless scheduler smoke still uses in-memory SQLite via `@pillage-first/api/host` `openSeededHostDatabase` for isolated resolver/scheduler unit testing — that helper is **not** used by online game-server startup.
 
 ## Constraints honored
 
@@ -103,6 +96,7 @@ Includes:
 - Dev tools routes rejected online; combat simulator admin-gated
 - Offline/online worlds separate (no OPFS import)
 - NPC seeding = existing `migrateAndSeed` (same as offline)
+- One authoritative MySQL store for all online players
 
 ## Follow-ups
 

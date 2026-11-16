@@ -1,10 +1,10 @@
 /**
  * Per-world serial queue for authoritative mutations/resolves.
  *
- * Scaffold note: game controllers + SQLite WASM DbFacade are synchronous, so
- * the queue mainly orders async HTTP entry points and future MySQL awaits.
- * Scheduler resolve callbacks remain sync on the Node event loop; wrap them
- * via `runSync` when calling into shared world state.
+ * Game controllers + MySQL DbFacade are synchronous (worker-thread bridge), so
+ * the queue mainly orders async HTTP entry points. Scheduler resolve callbacks
+ * remain sync on the Node event loop; wrap them via `runSync` when calling
+ * into shared world state.
  */
 export class WorldSerialQueue {
   private chain: Promise<void> = Promise.resolve();

@@ -14,10 +14,10 @@ export type MysqlAdapterStatus = {
 };
 
 /**
- * Online persistence adapter (decided: MySQL, not per-world SQLite).
+ * Online persistence adapter (MySQL only — no SQLite/WASM online fallback).
  *
  * Scope:
- * - Connection pool + health check
+ * - Connection pool + health check (startup fails if unreachable)
  * - Meta schema for accounts/sessions/world registry (1 account = 1 character)
  * - Game kernel persistence uses a separate MySQL DbFacade (same database,
  *   game tables alongside `online_*`) via `@pillage-first/api/host`.
