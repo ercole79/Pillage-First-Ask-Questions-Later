@@ -106,6 +106,16 @@
       }
     },
     {
+      "includes": ["apps/game-server/src/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["**/vite.config.ts", "plugins/**/*.ts"],
       "linter": {
         "rules": {

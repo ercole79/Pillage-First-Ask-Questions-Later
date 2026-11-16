@@ -1,9 +1,25 @@
-let notificationPort: MessagePort | null = null;
+export type NotificationSink = {
+  post: (message: unknown, options?: { force?: boolean }) => void;
+};
+
+let notificationSink: NotificationSink | null = null;
 let shouldPostNotifications = false;
 
+/**
+ * Pluggable notify sink for offline MessagePort and online WebSocket fan-out.
+ * Offline keeps `setNotificationPort`; online hosts call `setNotificationSink`.
+ */
+export const setNotificationSink = (sink: NotificationSink | null): void => {
+  notificationSink = sink;
+};
+
 export const setNotificationPort = (port: MessagePort): void => {
-  notificationPort = port;
-  notificationPort.start();
+  port.start();
+  setNotificationSink({
+    post: (message) => {
+      port.postMessage(message);
+    },
+  });
 };
 
 export const setShouldPostNotifications = (value: boolean): void => {
@@ -14,7 +30,7 @@ export const postWorkerMessage = (
   message: unknown,
   options?: { force?: boolean },
 ): void => {
-  if (!notificationPort) {
+  if (!notificationSink) {
     return;
   }
 
@@ -22,5 +38,5 @@ export const postWorkerMessage = (
     return;
   }
 
-  notificationPort.postMessage(message);
+  notificationSink.post(message, options);
 };
